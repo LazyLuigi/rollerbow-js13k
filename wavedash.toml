@@ -1,10 +1,4 @@
-# Wavedash challenge configuration.
-# game_id is given by `wavedash init` or by the Developer Portal: fill it in
-# before `wavedash dev`, `wavedash build push` or `wavedash publish`.
-game_id = ""
-
-# The Wavedash target is the UNCOMPRESSED page: no size limit there, and the
-# source stays readable. Never point at the whole of dist/, that would also ship
-# the page meant for the contest.
+game_id = "j973rdjeymzwydars6n0by1ndd8e6wwg"
 upload_dir = "dist/wavedash"
+
 entrypoint = "index.html"
