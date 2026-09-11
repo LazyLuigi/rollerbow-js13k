@@ -1,0 +1,10 @@
+# Configuration du challenge Wavedash.
+# game_id est donne par `wavedash init` ou par le Developer Portal : le remplir
+# avant `wavedash dev`, `wavedash build push` ou `wavedash publish`.
+game_id = ""
+
+# La cible Wavedash est la page NON compressee : pas de limite de taille la-bas,
+# et le source reste lisible. Ne jamais pointer sur tout dist/, cela embarquerait
+# aussi la page destinee au concours.
+upload_dir = "dist/wavedash"
+entrypoint = "index.html"

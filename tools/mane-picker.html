@@ -1,0 +1,334 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROLLERBOW - 6 crinieres</title>
+<style>
+:root{--bg:#100722;--card:#1b0f36;--ink:#f3ecff;--dim:#a793cf}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 "Trebuchet MS",Verdana,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:24px 16px 60px;max-width:900px;margin:0 auto}
+h1{font-size:28px;margin:0 0 4px}
+h1 span{background:linear-gradient(90deg,#ff4d6d,#ffb03a,#ffe14d,#5ce68a,#4dd2ff,#7d6bff,#e06bff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);margin:0 0 18px;font-size:14px}
+.ctl{display:flex;gap:16px;align-items:center;margin:0 0 18px;flex-wrap:wrap;font-size:13px;color:var(--dim)}
+.ctl label{display:flex;gap:8px;align-items:center}
+input[type=range]{accent-color:#a78bfa;width:150px}
+button{background:#2e1c55;color:var(--ink);border:1px solid #4a2f86;border-radius:8px;
+  padding:7px 14px;cursor:pointer;font:inherit;font-size:13px}
+button:hover{background:#3c2570}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:13px}
+.card{background:var(--card);border:1px solid #2e1c55;border-radius:13px;padding:11px;
+  transition:border-color .18s}
+.card:hover{border-color:#6f52c9}
+.hd{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 7px}
+.nm{font-weight:700;letter-spacing:.5px;font-size:15px}
+.cost{color:var(--dim);font-size:11px}
+.ds{color:var(--dim);font-size:12px;margin:7px 0 0;min-height:32px}
+canvas{width:100%;display:block;border-radius:8px;background:linear-gradient(160deg,#241549,#150c2c)}
+.foot{margin-top:24px;padding-top:15px;border-top:1px solid #2e1c55;color:var(--dim);font-size:13px}
+.foot b{color:var(--ink)}
+</style></head><body>
+
+<h1><span>SIX CRINIERES</span></h1>
+<p class="sub">Toutes animees par le meme mouvement, pour que la comparaison soit juste.</p>
+
+<div class="ctl">
+  <label>vitesse <input id=spd type=range min=0 max=100 value=55></label>
+  <label><input id=auto type=checkbox checked> galop automatique</label>
+  <button id=jump>saut</button>
+  <button id=slow>ralenti</button>
+</div>
+
+<div class="grid" id=grid></div>
+
+<div class="foot">
+  Le <b>cout</b> est la taille du code de la variante en caracteres de source. La crinière
+  actuelle du jeu en fait <b>~430</b>. Il reste <b>575 octets</b> de marge dans le zip, soit
+  environ 1700 caracteres de source : toutes les variantes passent, mais les plus lourdes
+  laisseront peu de place pour autre chose.
+</div>
+
+<script>
+"use strict";
+var M = Math, PI = M.PI, TAU = 6.2831853, cos = M.cos, sin = M.sin, hyp = M.hypot;
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+// ---------- chaine de Verlet partagee ----------
+function mkChain(n, seg, stiff) {
+  var a = [], i;
+  for (i = 0; i < n; i++) a.push({ x: 0, y: 0, px: 0, py: 0 });
+  a.seg = seg; a.st = stiff === undefined ? .965 : stiff;
+  return a;
+}
+function seedChain(ch, x, y) {
+  for (var i = 0; i < ch.length; i++) { ch[i].x = ch[i].px = x - i * ch.seg; ch[i].y = ch[i].py = y; }
+}
+function stepChain(ch, ax, ay, dt, wx, wy) {
+  var i, k, p;
+  ch[0].x = ax; ch[0].y = ay;
+  for (i = 1; i < ch.length; i++) {
+    p = ch[i];
+    var vx = (p.x - p.px) * ch.st, vy = (p.y - p.py) * ch.st;
+    p.px = p.x; p.py = p.y;
+    p.x += vx + wx * dt * .5; p.y += vy - 9 * dt * dt + wy * dt * .5;
+  }
+  for (k = 0; k < 3; k++) for (i = 1; i < ch.length; i++) {
+    var a = ch[i - 1], b = ch[i], dx = b.x - a.x, dy = b.y - a.y, d = hyp(dx, dy) || 1e-9;
+    var f = (d - ch.seg) / d;
+    if (i > 1) { a.x += dx * f * .5; a.y += dy * f * .5; b.x -= dx * f * .5; b.y -= dy * f * .5; }
+    else { b.x -= dx * f; b.y -= dy * f; }
+  }
+}
+// ruban plein fuselant le long d'une chaine
+function ribbon(X, ch, w0, taper, colFn) {
+  var n = ch.length, i, P = new Path2D(), o = [0, 0];
+  function off(i) {
+    var b = ch[M.min(n - 1, i + 1)], c = ch[M.max(0, i - 1)];
+    var dx = b.x - c.x, dy = b.y - c.y, d = hyp(dx, dy) || 1e-9, w = w0 * (1 - i / n * taper);
+    o[0] = -dy / d * w; o[1] = dx / d * w;
+  }
+  off(0); P.moveTo(ch[0].x + o[0], ch[0].y + o[1]);
+  for (i = 1; i < n; i++) { off(i); P.lineTo(ch[i].x + o[0], ch[i].y + o[1]); }
+  for (i = n - 1; i >= 0; i--) { off(i); P.lineTo(ch[i].x - o[0], ch[i].y - o[1]); }
+  P.closePath();
+  X.fillStyle = colFn(ch);
+  X.fill(P);
+}
+function grad(X, ch, h0, sat, lum) {
+  var n = ch.length;
+  var g = X.createLinearGradient(ch[0].x, ch[0].y, ch[n - 1].x, ch[n - 1].y);
+  g.addColorStop(0, 'hsl(' + (h0 | 0) + ',' + sat + '%,' + lum + '%)');
+  g.addColorStop(.5, 'hsl(' + ((h0 + 130) % 360 | 0) + ',' + sat + '%,' + (lum - 2) + '%)');
+  g.addColorStop(1, 'hsl(' + ((h0 + 250) % 360 | 0) + ',' + sat + '%,' + (lum + 4) + '%)');
+  return g;
+}
+
+// ---------- les six variantes ----------
+var VAR = [
+{
+  nm: '1. MECHES', ds: 'Cinq brins independants ancres le long du toupet, longueurs et raideurs differentes. Ils se desynchronisent, donc ca lit comme des crins et plus comme une aile.',
+  init: function (s) {
+    s.c = []; for (var i = 0; i < 5; i++) { var ch = mkChain(6 + i % 3, .115 + i * .012, .955 + i * .006); ch.o = (i - 2) * .055; ch.w = .085 - M.abs(i - 2) * .012; ch.h = i * 62; s.c.push(ch); }
+  },
+  seed: function (s, x, y) { for (var i = 0; i < 5; i++) seedChain(s.c[i], x, y); },
+  step: function (s, dt, ax, ay, wx, wy, ua) {
+    for (var i = 0; i < 5; i++) {
+      var o = s.c[i].o;
+      stepChain(s.c[i], ax + cos(ua + 1.2) * o, ay + sin(ua + 1.2) * o, dt, wx * (1 + i * .07), wy);
+    }
+  },
+  draw: function (X, s) {
+    for (var i = 0; i < 5; i++) ribbon(X, s.c[i], s.c[i].w, .88, function (c) { return grad(X, c, (s.c[i].h + s.t * 40) % 360, 96, 66); });
+  }
+},
+{
+  nm: '2. CRETE A TOUFFES', ds: 'Une chaine qui suit le col, decoupee en touffes triangulaires qui battent avec un dephasage. Graphique, tres lisible en mouvement rapide.',
+  init: function (s) { s.c = [mkChain(9, .105, .95)]; },
+  seed: function (s, x, y) { seedChain(s.c[0], x, y); },
+  step: function (s, dt, ax, ay, wx, wy) { stepChain(s.c[0], ax, ay, dt, wx, wy); },
+  draw: function (X, s) {
+    var ch = s.c[0], n = ch.length, i;
+    for (i = 0; i < n - 1; i++) {
+      var a = ch[i], b = ch[i + 1];
+      var dx = b.x - a.x, dy = b.y - a.y, d = hyp(dx, dy) || 1e-9;
+      var px = -dy / d, py = dx / d;
+      var w = (.19 - i * .017) * (1 + sin(s.t * 7 - i * .9) * .28);
+      X.beginPath();
+      X.moveTo(a.x + px * w, a.y + py * w);
+      X.lineTo(b.x, b.y);
+      X.lineTo(a.x - px * w * .35, a.y - py * w * .35);
+      X.closePath();
+      X.fillStyle = 'hsl(' + ((i * 40 + s.t * 45) % 360 | 0) + ',96%,' + (64 + i) + '%)';
+      X.fill();
+    }
+  }
+},
+{
+  nm: '3. RUBAN ONDULANT', ds: 'Un seul ruban, mais une onde se propage de la base vers la pointe et la largeur respire. Effet drapeau, plus vivant que la version actuelle sans rien couter de plus.',
+  init: function (s) { s.c = [mkChain(10, .1, .968)]; },
+  seed: function (s, x, y) { seedChain(s.c[0], x, y); },
+  step: function (s, dt, ax, ay, wx, wy) { stepChain(s.c[0], ax, ay, dt, wx, wy); },
+  draw: function (X, s) {
+    var ch = s.c[0], n = ch.length, i, P = new Path2D(), pts = [];
+    for (i = 0; i < n; i++) {
+      var b = ch[M.min(n - 1, i + 1)], c = ch[M.max(0, i - 1)];
+      var dx = b.x - c.x, dy = b.y - c.y, d = hyp(dx, dy) || 1e-9;
+      var wob = sin(s.t * 6 - i * .8) * .07 * (i / n);
+      var w = (.15 - i * .012) * (1 + sin(s.t * 5 - i * .6) * .3);
+      pts.push([ch[i].x - dy / d * wob, ch[i].y + dx / d * wob, -dy / d * w, dx / d * w]);
+    }
+    P.moveTo(pts[0][0] + pts[0][2], pts[0][1] + pts[0][3]);
+    for (i = 1; i < n; i++) P.lineTo(pts[i][0] + pts[i][2], pts[i][1] + pts[i][3]);
+    for (i = n - 1; i >= 0; i--) P.lineTo(pts[i][0] - pts[i][2], pts[i][1] - pts[i][3]);
+    P.closePath();
+    X.fillStyle = grad(X, ch, (s.t * 45) % 360, 97, 66);
+    X.fill(P);
+  }
+},
+{
+  nm: '4. COMETE', ds: 'Base large qui se divise en trois pointes, avec un halo additif dessous. Le plus magique, le plus lumineux, mais ca mange de la lisibilite quand ca va vite.',
+  init: function (s) {
+    s.c = []; for (var i = 0; i < 3; i++) { var ch = mkChain(8, .12 + i * .015, .972 - i * .01); ch.h = i * 90; s.c.push(ch); }
+  },
+  seed: function (s, x, y) { for (var i = 0; i < 3; i++) seedChain(s.c[i], x, y); },
+  step: function (s, dt, ax, ay, wx, wy) {
+    for (var i = 0; i < 3; i++) stepChain(s.c[i], ax, ay + (i - 1) * .03, dt, wx, wy + (i - 1) * 1.4);
+  },
+  draw: function (X, s) {
+    X.save(); X.globalCompositeOperation = 'lighter';
+    for (var k = 0; k < 2; k++) for (var i = 0; i < 3; i++) {
+      X.globalAlpha = k ? 1 : .28;
+      ribbon(X, s.c[i], (k ? .1 : .24) - i * .012, .9, function (c) { return grad(X, c, (s.c[i].h + s.t * 50) % 360, 100, k ? 70 : 55); });
+    }
+    X.restore();
+  }
+},
+{
+  nm: '5. SEPT BANDES', ds: 'Un brin par couleur de l arc-en-ciel, raideurs croissantes. Serres a l arret, ils s ouvrent en eventail avec la vitesse. Le plus raccord avec le theme.',
+  init: function (s) {
+    s.c = []; for (var i = 0; i < 7; i++) { var ch = mkChain(7, .112, .938 + i * .009); ch.h = [0, 32, 52, 130, 190, 225, 280][i]; ch.o = (i - 3) * .022; s.c.push(ch); }
+  },
+  seed: function (s, x, y) { for (var i = 0; i < 7; i++) seedChain(s.c[i], x, y); },
+  step: function (s, dt, ax, ay, wx, wy, ua) {
+    for (var i = 0; i < 7; i++) stepChain(s.c[i], ax + cos(ua + 1.2) * s.c[i].o, ay + sin(ua + 1.2) * s.c[i].o, dt, wx, wy);
+  },
+  draw: function (X, s) {
+    for (var i = 6; i >= 0; i--) ribbon(X, s.c[i], .052, .8, (function (i) { return function () { return 'hsl(' + s.c[i].h + ',94%,64%)'; }; })(i));
+  }
+},
+{
+  nm: '6. CRINS + ETINCELLES', ds: 'Trois crins fins seulement, et les pointes sement des etincelles qui retombent. Le plus leger a l ecran, et le scintillement reste visible meme quand la crinière est plaquee.',
+  init: function (s) {
+    s.c = []; s.p = [];
+    for (var i = 0; i < 3; i++) { var ch = mkChain(7, .125, .96 + i * .008); ch.o = (i - 1) * .05; ch.h = i * 110; s.c.push(ch); }
+  },
+  seed: function (s, x, y) { for (var i = 0; i < 3; i++) seedChain(s.c[i], x, y); s.p = []; },
+  step: function (s, dt, ax, ay, wx, wy, ua) {
+    var i;
+    for (i = 0; i < 3; i++) stepChain(s.c[i], ax + cos(ua + 1.2) * s.c[i].o, ay + sin(ua + 1.2) * s.c[i].o, dt, wx, wy);
+    for (i = 0; i < 3; i++) if (M.random() < .5) {
+      var tip = s.c[i][s.c[i].length - 1];
+      s.p.push({ x: tip.x, y: tip.y, vx: (M.random() - .5) * .6 + wx * .06, vy: M.random() * .5, l: .55 + M.random() * .5, h: (s.c[i].h + s.t * 60) % 360, r: .018 + M.random() * .026 });
+    }
+    for (i = s.p.length - 1; i >= 0; i--) {
+      var p = s.p[i]; p.l -= dt;
+      if (p.l <= 0) { s.p.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= 1.6 * dt;
+    }
+  },
+  draw: function (X, s) {
+    var i;
+    for (i = 0; i < 3; i++) ribbon(X, s.c[i], .055, .85, function (c) { return grad(X, c, (s.c[i].h + s.t * 50) % 360, 96, 67); });
+    X.save(); X.globalCompositeOperation = 'lighter';
+    for (i = 0; i < s.p.length; i++) {
+      var p = s.p[i];
+      X.fillStyle = 'hsla(' + (p.h | 0) + ',100%,74%,' + clamp(p.l * 1.6, 0, 1).toFixed(2) + ')';
+      X.beginPath(); X.arc(p.x, p.y, p.r, 0, TAU); X.fill();
+    }
+    X.restore();
+  }
+}
+];
+
+// ---------- la licorne (tete, encolure, amorce de corps) ----------
+var SKIN = '#fdfaff', SKIN2 = '#e3d2f7', INK = '#b79ad9';
+var NECKA = M.atan2(1.05 - .28, .44 - .34);
+function drawUni(X, a, tailSide) {
+  // repere corps deja pose par l appelant
+  X.save(); X.rotate(a);
+  // amorce du corps
+  X.fillStyle = SKIN2;
+  X.beginPath(); X.ellipse(-.55, -.05, .55, .34, 0, 0, TAU); X.fill();
+  // encolure : garrot (.34,.28) -> tete (.60,.92)
+  var wx = .34, wy = .28, hx = .60, hy = .92;
+  var nx = hx - wx, ny = hy - wy, nl = hyp(nx, ny), ux = nx / nl, uy = ny / nl, px = -uy, py = ux;
+  X.beginPath();
+  X.moveTo(wx + px * .3, wy + py * .3);
+  X.bezierCurveTo(wx + ux * nl * .5 + px * .3, wy + uy * nl * .5 + py * .3,
+                  hx - ux * .2 + px * .22, hy - uy * .2 + py * .22,
+                  hx + px * .17, hy + py * .17);
+  X.lineTo(hx - px * .17, hy - py * .17);
+  X.bezierCurveTo(hx - ux * .3 - px * .16, hy - uy * .3 - py * .16,
+                  wx + ux * .3 - px * .22, wy + uy * .3 - py * .22,
+                  wx - px * .26, wy - py * .26);
+  X.closePath();
+  X.fillStyle = SKIN; X.fill(); X.strokeStyle = INK; X.lineWidth = .035; X.stroke();
+  // tete
+  X.save(); X.translate(hx, hy);
+  X.beginPath();
+  X.moveTo(-.13, .22); X.bezierCurveTo(-.22, .40, -.13, .46, -.04, .34);
+  X.bezierCurveTo(.01, .27, -.04, .21, -.13, .22);
+  X.fillStyle = SKIN2; X.fill(); X.strokeStyle = INK; X.stroke();
+  X.beginPath();
+  X.moveTo(-.20, .08); X.bezierCurveTo(-.17, .28, .04, .35, .19, .27);
+  X.bezierCurveTo(.33, .19, .43, .07, .41, -.06);
+  X.bezierCurveTo(.39, -.19, .26, -.25, .11, -.23);
+  X.bezierCurveTo(-.05, -.21, -.23, -.10, -.20, .08);
+  X.closePath(); X.fillStyle = SKIN; X.fill(); X.stroke();
+  X.fillStyle = '#c9aae8'; X.beginPath(); X.arc(.31, -.09, .036, 0, TAU); X.fill();
+  X.fillStyle = 'rgba(255,150,190,.42)'; X.beginPath(); X.arc(.15, -.03, .085, 0, TAU); X.fill();
+  X.fillStyle = '#3b2159'; X.beginPath(); X.ellipse(.03, .10, .062, .071, 0, 0, TAU); X.fill();
+  X.fillStyle = '#fff'; X.beginPath(); X.arc(.055, .135, .024, 0, TAU); X.fill();
+  var hg = X.createLinearGradient(.14, .24, .34, .74);
+  hg.addColorStop(0, '#ffe9a0'); hg.addColorStop(1, '#ffab3d');
+  X.beginPath(); X.moveTo(.06, .26); X.lineTo(.24, .21); X.lineTo(.30, .72); X.closePath();
+  X.fillStyle = hg; X.fill(); X.strokeStyle = '#e0912c'; X.lineWidth = .022; X.stroke();
+  X.restore();
+  X.restore();
+}
+
+// ---------- mouvement partage ----------
+var T = 0, jumpAt = -99, slowmo = 1;
+function motion(t) {
+  var spd = auto.checked ? (6 + 11 * (.5 + .5 * sin(t * .38))) : (+spdEl.value / 100 * 20);
+  var jp = t - jumpAt, air = jp >= 0 && jp < 1.5;
+  var y = air ? sin(jp / 1.5 * PI) * 1.5 : 0;
+  var bob = air ? 0 : sin(t * (2 + spd * .5)) * .05;
+  var a = air ? sin(jp / 1.5 * PI) * .55 : sin(t * 3.1) * .07;
+  return { spd: spd, y: y + bob, a: a, air: air };
+}
+
+// ---------- montage ----------
+var grid = document.getElementById('grid'), spdEl = document.getElementById('spd'),
+    auto = document.getElementById('auto'), cards = [];
+VAR.forEach(function (v, k) {
+  var cost = (String(v.init) + String(v.step) + String(v.draw) + String(v.seed)).replace(/\s+/g, ' ').length;
+  var d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<div class=hd><span class=nm>' + v.nm + '</span><span class=cost>~' + cost + ' car.</span></div>' +
+                '<canvas width=680 height=440></canvas><p class=ds>' + v.ds + '</p>';
+  grid.appendChild(d);
+  var cv = d.querySelector('canvas');
+  var st = { t: 0, seeded: 0 };
+  v.init(st);
+  cards.push({ v: v, st: st, X: cv.getContext('2d'), cv: cv });
+});
+document.getElementById('jump').onclick = function () { jumpAt = T; };
+document.getElementById('slow').onclick = function () { slowmo = slowmo > .5 ? .25 : 1; this.textContent = slowmo > .5 ? 'ralenti' : 'vitesse normale'; };
+
+var last = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  var dt = M.min(.04, (ts - last) / 1000) || 0; last = ts;
+  dt *= slowmo; T += dt;
+  var m = motion(T);
+  cards.forEach(function (c) {
+    var X = c.X, W = c.cv.width, H = c.cv.height, ppm = H / 3.1;
+    X.setTransform(1, 0, 0, 1, 0, 0);
+    X.clearRect(0, 0, W, H);
+    X.setTransform(ppm, 0, 0, -ppm, W * .66, H * .82);
+    X.translate(0, m.y);
+    // ancrage de la criniere : le toupet, derriere les oreilles
+    var ca = cos(m.a), sa = sin(m.a);
+    var ax = ca * .44 - sa * 1.05, ay = sa * .44 + ca * 1.05 + m.y;
+    c.st.t = T;
+    if (!c.st.seeded) { c.v.seed(c.st, ax, ay); c.st.seeded = 1; }
+    c.v.step(c.st, dt, ax, ay, -m.spd * .3, m.air ? 1.2 : -m.spd * .05, m.a);
+    drawUni(X, m.a, 1);
+    c.v.draw(X, c.st);
+  });
+}
+requestAnimationFrame(loop);
+</script></body></html>

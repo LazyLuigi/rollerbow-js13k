@@ -1,0 +1,491 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROLLERBOW - reglage des ancrages</title>
+<style>
+:root{--bg:#100722;--card:#1b0f36;--ink:#f3ecff;--dim:#a793cf}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 "Trebuchet MS",Verdana,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:20px 16px 50px;max-width:1080px;margin:0 auto}
+h1{font-size:25px;margin:0 0 3px}
+h1 span{background:linear-gradient(90deg,#ff4d6d,#ffb03a,#ffe14d,#5ce68a,#4dd2ff,#7d6bff,#e06bff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);margin:0 0 14px;font-size:13px}
+canvas{width:100%;display:block;border-radius:12px;border:1px solid #2e1c55;margin:0 0 12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px;align-items:center;font-size:13px;color:var(--dim)}
+.row label{display:flex;gap:7px;align-items:center;cursor:pointer}
+button{background:#2e1c55;color:var(--ink);border:1px solid #4a2f86;border-radius:8px;
+  padding:6px 13px;cursor:pointer;font:inherit;font-size:13px}
+button:hover{background:#3c2570}
+.panes{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px}
+.pane{background:var(--card);border:1px solid #2e1c55;border-radius:12px;padding:13px 15px}
+.pane h3{margin:0 0 10px;font-size:14px;letter-spacing:.6px}
+.sl{display:grid;grid-template-columns:58px 1fr 56px;gap:9px;align-items:center;margin:0 0 7px;font-size:12px}
+.sl input{width:100%;accent-color:#a78bfa}
+.sl b{color:var(--ink);font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.mg{margin-top:9px;padding:7px 10px;border-radius:7px;font-size:12px;font-weight:700}
+.ok{background:#123d29;color:#7cf0a8}.ko{background:#4a1220;color:#ff8098}
+.out{margin-top:12px;background:#0c0619;border:1px solid #2e1c55;border-radius:10px;
+  padding:12px 14px;font:12px/1.65 ui-monospace,Menlo,Consolas,monospace;color:#c9b6f5;
+  white-space:pre;overflow-x:auto}
+</style></head><body>
+
+<h1><span>REGLAGE DES ANCRAGES</span></h1>
+<p class="sub">Le corps, la tete et les pattes sont le code exact du jeu, copie tel quel. Seules la criniere et la queue changent.</p>
+
+<canvas id=c width=1900 height=880></canvas>
+
+<div class="row">
+  <label>vitesse <input id=spd type=range min=10 max=100 value=62 style="width:130px"></label>
+  <button id=jump>saut</button>
+  <button id=slow>ralenti</button>
+  <label><input id=anch type=checkbox checked> montrer les ancrages</label>
+  <label><input id=skin type=checkbox> silhouette en transparence</label>
+</div>
+
+<div class="panes">
+  <div class="pane"><h3>CRINIERE — 5 meches</h3><div id=pm></div><div id=mgm class="mg"></div></div>
+  <div class="pane"><h3>QUEUE — 4 meches</h3><div id=pt></div><div id=mgt class="mg"></div></div>
+</div>
+
+<div class="out" id=out></div>
+<div class="row" style="margin-top:10px"><button id=copy>copier les valeurs</button><button id=reset>valeurs par defaut</button></div>
+
+<script>
+"use strict";
+var M = Math, PI = M.PI, TAU = 6.2831853, cos = M.cos, sin = M.sin, abs = M.abs,
+    sqrt = M.sqrt, hyp = M.hypot, mn = M.min, mx = M.max, rnd = M.random;
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+var C = document.getElementById('c'), X = C.getContext('2d'), W = C.width, H = C.height, P2 = Path2D;
+
+/* ============================================================
+   SHIM : tout ce dont le code de dessin du jeu a besoin
+   ============================================================ */
+var OFX = .75, OFY = -.62, HDX = .60, HDY = .92, S = .7, NT = 4000;
+var LOC = [[HDX, HDY], [.34, .28], [.42, -.04], [-.50, .02], [OFX, OFY], [-OFX, OFY]];
+var ys = [], hole = [];
+for (var q = 0; q < NT; q++) { ys[q] = 0; hole[q] = 0; }
+function groundY() { return 0; }
+var B = { x: 0, y: .92, a: 0 }, mode = 1, air = 0, AT = 0, squash = 0, lost = -1, rag = [];
+var F = { a: 0 }, R = { a: 0 };
+function loc(ox, oy) { var c = cos(B.a), s = sin(B.a); return [B.x + c * ox - s * oy, B.y + s * ox + c * oy]; }
+function mkChain(n, seg) { var a = [], i; for (i = 0; i < n; i++) a.push({ x: 0, y: 0, px: 0, py: 0, s: seg }); return a; }
+function chainTick(ch, ax, ay, dt, wx, wy) {
+  var i, k;
+  ch[0].x = ax; ch[0].y = ay;
+  for (i = 1; i < ch.length; i++) {
+    var p = ch[i], vx = (p.x - p.px) * (ch.damp || .962), vy = (p.y - p.py) * (ch.damp || .962);
+    p.px = p.x; p.py = p.y;
+    p.x += vx + wx * dt * .5; p.y += vy - 9 * dt * dt + wy * dt * .5;
+  }
+  for (k = 0; k < 3; k++) for (i = 1; i < ch.length; i++) {
+    var a = ch[i - 1], b = ch[i], dx = b.x - a.x, dy = b.y - a.y, d = hyp(dx, dy) || 1e-9;
+    var f = (d - b.s) / d;
+    if (i > 1) { a.x += dx * f * .5; a.y += dy * f * .5; b.x -= dx * f * .5; b.y -= dy * f * .5; }
+    else { b.x -= dx * f; b.y -= dy * f; }
+  }
+}
+function seedChain(ch, x, y) { for (var i = 0; i < ch.length; i++) { ch[i].x = ch[i].px = x; ch[i].y = ch[i].py = y - i * .1; } }
+var mane = mkChain(8, .125), tail = mkChain(9, .145);   // presents pour le code du jeu, non dessines
+
+/* ============================================================
+   CODE DE DESSIN COPIE MOT POUR MOT DEPUIS galop.html
+   (chOff, chain, part, fs2, joint, leg, hoof, drawUni)
+   Deux lignes seulement sont modifiees, marquees MECHES.
+   ============================================================ */
+var _cw = [0, 0];
+function chOff(ch, i, w0, n) {
+  var b = ch[mn(n - 1, i + 1)], c = ch[mx(0, i - 1)];
+  var dx = b.x - c.x, dy = b.y - c.y, d = hyp(dx, dy) || 1e-9, w = w0 * (1 - i / n * .82);
+  _cw[0] = -dy / d * w; _cw[1] = dx / d * w;
+}
+function chain(ch, w0, hue0) {
+  var n = ch.length, i, P = new P2();
+  chOff(ch, 0, w0, n); P.moveTo(ch[0].x + _cw[0], ch[0].y + _cw[1]);
+  for (i = 1; i < n; i++) { chOff(ch, i, w0, n); P.lineTo(ch[i].x + _cw[0], ch[i].y + _cw[1]); }
+  for (i = n - 1; i >= 0; i--) { chOff(ch, i, w0, n); P.lineTo(ch[i].x - _cw[0], ch[i].y - _cw[1]); }
+  P.closePath();
+  var g = X.createLinearGradient(ch[0].x, ch[0].y, ch[n - 1].x, ch[n - 1].y);
+  g.addColorStop(0, 'hsl(' + (hue0 | 0) + ',96%,66%)');
+  g.addColorStop(.5, 'hsl(' + ((hue0 + 130) % 360 | 0) + ',96%,64%)');
+  g.addColorStop(1, 'hsl(' + ((hue0 + 250) % 360 | 0) + ',96%,70%)');
+  X.fillStyle = g; X.fill(P);
+}
+var NECKA = M.atan2(HDY - .28, HDX - .34);   // angle encolure/corps au repos
+var INK = '#b79ad9', SKIN = '#fdfaff', SKIN2 = '#e3d2f7';
+function part(px, py, ang, sx, sy) {        // repere local en metres, ancre + rotation
+  X.save(); X.translate(px, py); X.rotate(ang); if (sx) X.scale(sx, sy);
+}
+function fs2(fill, stroke) { X.fillStyle = fill; X.fill(); if (stroke !== 0) { X.strokeStyle = INK; X.lineWidth = .035; X.stroke(); } }
+function joint(x, y, r, c) { X.beginPath(); X.arc(x, y, r, 0, TAU); X.fillStyle = c; X.fill(); }
+
+var LEGL = 1.02;
+// Articulation stylisee plutot qu'IK exacte : elle reste a 62 % de la descente et
+// la saillie est bornee. L'IK exacte la placait a 40 % avec 49 cm de saillie,
+// donc 34 cm derriere le sabot : la patte partait en sauterelle.
+function leg(hx, hy, fx, fy, side, near) {
+  var dx = fx - hx, dy = fy - hy, d = hyp(dx, dy) || 1e-9, ux = dx / d, uy = dy / d;
+  var bul = .05 + mn(.22, mx(0, LEGL - d) * .55);
+  var kx = hx + ux * d * .62 - uy * bul * side, ky = hy + uy * d * .62 + ux * bul * side;
+  var c = near ? SKIN : '#c6b0e8', w = near ? .17 : .152;
+  var bx = lerp(kx, fx, .78), by = lerp(ky, fy, .78);
+  X.lineCap = 'round'; X.lineJoin = 'round'; X.strokeStyle = c;
+  X.lineWidth = w; X.beginPath(); X.moveTo(hx, hy); X.lineTo(kx, ky); X.stroke();
+  X.lineWidth = w * .6; X.beginPath(); X.moveTo(kx, ky); X.lineTo(bx, by); X.stroke();
+  X.lineWidth = w * .46; X.beginPath(); X.moveTo(bx, by); X.lineTo(fx, fy); X.stroke();
+  joint(hx, hy, w * .6, c); joint(kx, ky, w * .5, c); joint(bx, by, w * .36, c);
+  joint(fx, fy, .082, near ? '#6b4f9c' : '#55407e');
+}
+// Cycle de galop. La phase vient de la distance parcourue, donc la cadence suit
+// la vitesse exactement comme le faisait la rotation des roues.
+var DUTY = .42, STRIDE = .62, LIFT = .42, HX = 0, HY = 0, gAir = 0;
+function hoof(cx, cy, p, fwd) {
+  p -= M.floor(p);
+  var ox, oy, q;
+  if (p < DUTY) { ox = STRIDE * (.5 - p / DUTY); oy = 0; }     // appui : le sabot recule au sol
+  else { q = (p - DUTY) / (1 - DUTY); ox = STRIDE * (q - .5); oy = LIFT * sin(q * PI); }
+  var x = cx + ox;
+  // le sabot se pose sur la piste sous lui. Sans ca, en descente, le decalage
+  // horizontal de la foulee le laisse flotter 20 cm au dessus du sol.
+  var y = clamp(groundY(x), cy - .62, cy - .04) + oy;
+  if (gAir > .01) {                                            // en vol : anterieurs tendus, posterieurs replies
+    var ca = cos(B.a), sa = sin(B.a), bx = fwd * .34, by = .02;
+    x = lerp(x, cx + ca * bx - sa * by, gAir);
+    y = lerp(y, cy + sa * bx + ca * by, gAir);
+  }
+  HX = x; HY = y;
+}
+function drawUni() {
+  var J = [], i;
+  if (mode === 2) for (i = 0; i < 6; i++) J.push([rag[i].x, rag[i].y]);
+  else for (i = 0; i < 6; i++) J.push(loc(LOC[i][0], LOC[i][1]));
+  var hd = J[0], wi = J[1], ch = J[2], ru = J[3], fs = J[4], rs = J[5];
+  // angles reconstruits : marche pour le corps rigide comme pour le ragdoll
+  var ta = mode === 2 ? M.atan2(ch[1] - ru[1], ch[0] - ru[0]) : B.a;
+  var nk = hd;
+  var ha = mode === 2 ? M.atan2(hd[1] - wi[1], hd[0] - wi[0]) - NECKA : B.a;
+  var sq = clamp(squash, 0, 1);
+
+  var gi = B.x / S | 0;
+  if (!hole[gi]) {
+    var g0 = groundY(B.x), hg = clamp((B.y - g0 - .9) / 6, 0, 1);
+    X.save(); X.globalAlpha = .26 * (1 - hg); X.fillStyle = '#2a1740';
+    X.beginPath(); X.ellipse(B.x, g0 - .06, .95 + hg * 1.4, .16, 0, 0, TAU); X.fill(); X.restore();
+  }
+
+  gAir = lerp(gAir, mode === 1 && air ? 1 : 0, .14);
+  if (mode === 2) gAir = 0;
+  var gp = B.x / 1.9;                                  // une foulee tous les 1.9 m
+  // tangage : le corps monte deux fois par foulee, les sabots eux restent au sol
+  var bob = mode === 1 && !air ? sin(gp * TAU * 2) * .035 : 0;
+  hd[1] += bob; wi[1] += bob; ch[1] += bob; ru[1] += bob;
+  var sh = [ru[0] + cos(ta) * .95 - sin(ta) * -.15, ru[1] + sin(ta) * .95 + cos(ta) * -.15];
+  var hi = [ru[0] + cos(ta) * -.03 - sin(ta) * -.17, ru[1] + sin(ta) * -.03 + cos(ta) * -.17];
+  if (lost === 0) nk = [wi[0] + cos(ta + NECKA) * .3, wi[1] + sin(ta + NECKA) * .3];
+  if (lost === 4) fs = [sh[0] + sin(ta) * .44, sh[1] - cos(ta) * .44];
+  if (lost === 5) rs = [hi[0] + sin(ta) * .44, hi[1] - cos(ta) * .44];
+  // galop transverse : posterieur, posterieur, anterieur, anterieur, puis suspension
+  function hf(c, ph, fwd) {
+    if (mode === 2) { HX = c[0]; HY = c[1] - .28; } else hoof(c[0], c[1], gp + ph, fwd);
+  }
+  for (var q9 = 0; q9 < 4; q9++) chain(TAIL[q9], TAIL[q9].w, (TAIL[q9].h + AT * 42) % 360);  // MECHES
+  hf(fs, .58, 1); leg(sh[0] + .1, sh[1], HX + .13, HY, 1, 0);
+  hf(rs, .13, -1); leg(hi[0] + .1, hi[1], HX + .13, HY, 1, 0);
+
+  // encolure : quadrilatere fuselant qui relie toujours garrot et tete
+  var nx = nk[0] - wi[0], ny = nk[1] - wi[1], nl = hyp(nx, ny) || 1e-9;
+  var ux = nx / nl, uy = ny / nl, pxx = -uy, pyy = ux;
+  X.beginPath();
+  X.moveTo(wi[0] + pxx * .30, wi[1] + pyy * .30);
+  X.bezierCurveTo(wi[0] + ux * .5 * nl + pxx * .30, wi[1] + uy * .5 * nl + pyy * .30,
+                  nk[0] - ux * .2 + pxx * .22, nk[1] - uy * .2 + pyy * .22,
+                  nk[0] + pxx * .17, nk[1] + pyy * .17);
+  X.lineTo(nk[0] - pxx * .17, nk[1] - pyy * .17);
+  X.bezierCurveTo(nk[0] - ux * .3 - pxx * .16, nk[1] - uy * .3 - pyy * .16,
+                  wi[0] + ux * .3 - pxx * .22, wi[1] + uy * .3 - pyy * .22,
+                  wi[0] - pxx * .26, wi[1] - pyy * .26);
+  X.closePath(); fs2(SKIN);
+
+  // torse : ancre a la croupe, oriente croupe -> poitrail, avec ecrasement a l'impact
+  part(ru[0], ru[1], ta, 1 + sq * .1, 1 - sq * .16);
+  var bg = X.createLinearGradient(0, .38, 0, -.4);
+  bg.addColorStop(0, '#fff'); bg.addColorStop(.5, SKIN); bg.addColorStop(1, SKIN2);
+  X.beginPath();
+  X.moveTo(-.16, .02);
+  X.bezierCurveTo(-.14, .26, .02, .37, .26, .37);
+  X.bezierCurveTo(.52, .37, .74, .34, .88, .28);
+  X.bezierCurveTo(1.02, .22, 1.09, .10, 1.07, -.04);
+  X.bezierCurveTo(1.05, -.22, .90, -.34, .68, -.36);
+  X.bezierCurveTo(.44, -.38, .18, -.36, .02, -.28);
+  X.bezierCurveTo(-.12, -.20, -.19, -.10, -.16, .02);
+  X.closePath(); fs2(bg);
+  X.beginPath(); X.ellipse(.30, -.08, .34, .18, .1, 0, TAU);
+  X.fillStyle = 'rgba(190,160,230,.22)'; X.fill();    // ombre du flanc
+  X.restore();
+
+  for (var q8 = 0; q8 < 5; q8++) chain(MANE[q8], MANE[q8].w, (MANE[q8].h + AT * 42) % 360);  // MECHES : sous la tete
+
+  // tete
+  part(hd[0], hd[1], ha);
+  X.beginPath();                                       // oreille
+  X.moveTo(-.13, .22); X.bezierCurveTo(-.22, .40, -.13, .46, -.04, .34);
+  X.bezierCurveTo(.01, .27, -.04, .21, -.13, .22);
+  fs2(SKIN2);
+  X.beginPath();                                       // crane + chanfrein + museau
+  X.moveTo(-.20, .08);
+  X.bezierCurveTo(-.17, .28, .04, .35, .19, .27);
+  X.bezierCurveTo(.33, .19, .43, .07, .41, -.06);
+  X.bezierCurveTo(.39, -.19, .26, -.25, .11, -.23);
+  X.bezierCurveTo(-.05, -.21, -.23, -.10, -.20, .08);
+  X.closePath(); fs2(SKIN);
+  joint(.31, -.09, .036, '#c9aae8');                   // naseau
+  joint(.15, -.03, .085, 'rgba(255,150,190,.42)');     // joue rose
+  var eo = mode === 2 ? .105 : air ? .085 : .062;
+  var bl = (AT % 4.1) < .09 ? .18 : 1;                 // clignement
+  X.beginPath(); X.ellipse(.03, .10, eo, eo * 1.15 * bl, 0, 0, TAU); X.fillStyle = '#3b2159'; X.fill();
+  if (bl > .5) joint(.055, .135, eo * .38, '#fff');
+  // corne torsadee
+  var hgr = X.createLinearGradient(.14, .24, .34, .74);
+  hgr.addColorStop(0, '#ffe9a0'); hgr.addColorStop(1, '#ffab3d');
+  X.beginPath(); X.moveTo(.06, .26); X.lineTo(.24, .21); X.lineTo(.30, .72); X.closePath();
+  X.fillStyle = hgr; X.fill(); X.strokeStyle = '#e0912c'; X.lineWidth = .022; X.stroke();
+  X.strokeStyle = 'rgba(224,145,44,.7)'; X.lineWidth = .026;
+  for (i = 1; i < 4; i++) {
+    var t = i / 4;
+    X.beginPath(); X.moveTo(lerp(.06, .30, t), lerp(.26, .72, t)); X.lineTo(lerp(.24, .30, t), lerp(.21, .72, t)); X.stroke();
+  }
+  X.save(); X.globalCompositeOperation = 'lighter';
+  X.fillStyle = 'rgba(255,228,150,.3)';
+  X.beginPath(); X.arc(.30, .70, .2 + sin(AT * 5) * .03, 0, TAU); X.fill(); X.restore();
+  X.restore();
+
+  hf(fs, .46, 1); leg(sh[0] - .07, sh[1], HX - .11, HY, 1, 1);
+  hf(rs, 0, -1); leg(hi[0] - .07, hi[1], HX - .11, HY, 1, 1);
+  if (lost > 0) {                                      // le bout de patte arrache
+    var lp = rag[lost], vx2 = (lp.x - lp.px) * 7, vy2 = (lp.y - lp.py) * 7;
+    var vl = hyp(vx2, vy2) || 1e-9;
+    X.strokeStyle = SKIN; X.lineWidth = .13; X.lineCap = 'round';
+    X.beginPath(); X.moveTo(lp.x - vx2 / vl * .34, lp.y - vy2 / vl * .34); X.lineTo(lp.x, lp.y); X.stroke();
+    joint(lp.x, lp.y, .082, '#6b4f9c');
+  }
+  // MECHES : la criniere n'est plus dessinee ici, elle est passee avant la tete
+}
+
+
+/* ============================================================
+   MECHES : 5 pour la criniere, 4 pour la queue
+   ============================================================ */
+var MANE = [], TAIL = [], seeded = 0;
+for (var i = 0; i < 5; i++) {
+  var ch = mkChain(7 + i % 3, .112 + i * .012);
+  ch.damp = .953 + i * .006; ch.w = .078 - abs(i - 2) * .011; ch.h = i * 66;
+  MANE.push(ch);
+}
+for (i = 0; i < 4; i++) {
+  var c2 = mkChain(8 + i % 2, .128 + i * .01);
+  c2.damp = .958 + i * .005; c2.w = .075 - abs(i - 1.5) * .012; c2.h = 40 + i * 78;
+  TAIL.push(c2);
+}
+// P.x, P.y : ancre de base dans le repere du corps. P.sp : etalement. P.in : enfoncement.
+var PM = { x: .52, y: .84, sp: .085, in: .05 };
+var PT = { x: -.47, y: .13, sp: .06, in: .05 };
+var NU = [.377, .927];                                   // axe garrot -> tete, normalise
+function maneAnchor(k) {
+  var o = (k - 2) * PM.sp;
+  return loc(PM.x + NU[0] * o + NU[1] * PM.in, PM.y + NU[1] * o - NU[0] * PM.in);
+}
+function tailAnchor(k) {
+  var o = (k - 1.5) * PT.sp;
+  return loc(PT.x + PT.in, PT.y + o);
+}
+
+/* ---------- silhouette exacte, pour verifier que les racines sont dessous ---------- */
+function bez(p, a, b, c, d) {
+  for (var i = 1; i <= 12; i++) { var u = i / 12, v = 1 - u;
+    p.push([v*v*v*a[0]+3*v*v*u*b[0]+3*v*u*u*c[0]+u*u*u*d[0],
+            v*v*v*a[1]+3*v*v*u*b[1]+3*v*u*u*c[1]+u*u*u*d[1]]); }
+}
+var TORSO = (function () {
+  var p = [[-.16, .02]];
+  bez(p, [-.16,.02],[-.14,.26],[.02,.37],[.26,.37]);
+  bez(p, [.26,.37],[.52,.37],[.74,.34],[.88,.28]);
+  bez(p, [.88,.28],[1.02,.22],[1.09,.10],[1.07,-.04]);
+  bez(p, [1.07,-.04],[1.05,-.22],[.90,-.34],[.68,-.36]);
+  bez(p, [.68,-.36],[.44,-.38],[.18,-.36],[.02,-.28]);
+  bez(p, [.02,-.28],[-.12,-.20],[-.19,-.10],[-.16,.02]);
+  return p.map(function (a) { return [a[0] - .50, a[1] + .02]; });
+})();
+var HEAD = (function () {
+  var p = [[-.20, .08]];
+  bez(p, [-.20,.08],[-.17,.28],[.04,.35],[.19,.27]);
+  bez(p, [.19,.27],[.33,.19],[.43,.07],[.41,-.06]);
+  bez(p, [.41,-.06],[.39,-.19],[.26,-.25],[.11,-.23]);
+  bez(p, [.11,-.23],[-.05,-.21],[-.23,-.10],[-.20,.08]);
+  return p.map(function (a) { return [a[0] + HDX, a[1] + HDY]; });
+})();
+var NECK = (function () {
+  var wx=.34, wy=.28, nx=HDX-wx, ny=HDY-wy, nl=hyp(nx,ny), ux=nx/nl, uy=ny/nl, px=-uy, py=ux;
+  var p = [[wx+px*.30, wy+py*.30]];
+  bez(p, [wx+px*.30,wy+py*.30],[wx+ux*.5*nl+px*.30,wy+uy*.5*nl+py*.30],
+         [HDX-ux*.2+px*.22,HDY-uy*.2+py*.22],[HDX+px*.17,HDY+py*.17]);
+  p.push([HDX-px*.17, HDY-py*.17]);
+  bez(p, [HDX-px*.17,HDY-py*.17],[HDX-ux*.3-px*.16,HDY-uy*.3-py*.16],
+         [wx+ux*.3-px*.22,wy+uy*.3-py*.22],[wx-px*.26,wy-py*.26]);
+  return p;
+})();
+function inPoly(p, poly) {
+  var x = p[0], y = p[1], n = poly.length, c = 0, i, j;
+  for (i = 0, j = n - 1; i < n; j = i++) {
+    var a = poly[i], b = poly[j];
+    if ((a[1] > y) !== (b[1] > y) && x < (b[0]-a[0])*(y-a[1])/(b[1]-a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function edgeDist(p, poly) {
+  var best = 1e9, i, j;
+  for (i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var a = poly[j], b = poly[i], dx = b[0]-a[0], dy = b[1]-a[1], L2 = dx*dx+dy*dy || 1e-9;
+    var u = clamp(((p[0]-a[0])*dx + (p[1]-a[1])*dy) / L2, 0, 1);
+    var d = hyp(p[0]-(a[0]+dx*u), p[1]-(a[1]+dy*u));
+    if (d < best) best = d;
+  }
+  return best;
+}
+// marge en coordonnees corps (l ancre est calculee en monde, on la ramene)
+function margin(p) {
+  var c = cos(B.a), s = sin(B.a), rx = p[0]-B.x, ry = p[1]-B.y;
+  var lx = c*rx + s*ry, ly = -s*rx + c*ry, best = -1;
+  [HEAD, NECK, TORSO].forEach(function (poly) {
+    if (inPoly([lx, ly], poly)) { var d = edgeDist([lx, ly], poly); if (d > best) best = d; }
+  });
+  return best;
+}
+
+/* ============================================================
+   INTERFACE
+   ============================================================ */
+var DEF = { mx: .52, my: .84, msp: .085, min: .05, tx: -.47, ty: .13, tsp: .06, tin: .05 };
+var SL = [
+  ['pm', 'mx', 'X', -.2, 1.1, .01], ['pm', 'my', 'Y', -.2, 1.5, .01],
+  ['pm', 'msp', 'etalement', 0, .25, .005], ['pm', 'min', 'enfoncement', -.1, .3, .005],
+  ['pt', 'tx', 'X', -1.1, .3, .01], ['pt', 'ty', 'Y', -.5, .8, .01],
+  ['pt', 'tsp', 'etalement', 0, .25, .005], ['pt', 'tin', 'enfoncement', -.1, .3, .005]
+];
+var vals = {}, inputs = {};
+SL.forEach(function (s) {
+  vals[s[1]] = DEF[s[1]];
+  var host = document.getElementById(s[0]);
+  var d = document.createElement('div'); d.className = 'sl';
+  d.innerHTML = '<span>' + s[2] + '</span><input type=range min=' + s[3] + ' max=' + s[4] +
+                ' step=' + s[5] + ' value=' + DEF[s[1]] + '><b></b>';
+  host.appendChild(d);
+  var inp = d.querySelector('input'), out = d.querySelector('b');
+  inputs[s[1]] = { i: inp, o: out };
+  inp.oninput = function () { vals[s[1]] = +inp.value; sync(); };
+});
+function sync() {
+  PM.x = vals.mx; PM.y = vals.my; PM.sp = vals.msp; PM.in = vals.min;
+  PT.x = vals.tx; PT.y = vals.ty; PT.sp = vals.tsp; PT.in = vals.tin;
+  SL.forEach(function (s) { inputs[s[1]].o.textContent = vals[s[1]].toFixed(3).replace(/0+$/, '').replace(/\.$/, '.0'); });
+  document.getElementById('out').textContent =
+    '// criniere : 5 meches\n' +
+    'var PM = { x: ' + PM.x.toFixed(3) + ', y: ' + PM.y.toFixed(3) +
+    ', sp: ' + PM.sp.toFixed(3) + ', in: ' + PM.in.toFixed(3) + ' };\n' +
+    '// queue : 4 meches\n' +
+    'var PT = { x: ' + PT.x.toFixed(3) + ', y: ' + PT.y.toFixed(3) +
+    ', sp: ' + PT.sp.toFixed(3) + ', in: ' + PT.in.toFixed(3) + ' };';
+}
+document.getElementById('reset').onclick = function () {
+  SL.forEach(function (s) { vals[s[1]] = DEF[s[1]]; inputs[s[1]].i.value = DEF[s[1]]; });
+  sync();
+};
+document.getElementById('copy').onclick = function () {
+  navigator.clipboard.writeText(document.getElementById('out').textContent);
+  this.textContent = 'copie'; var b = this; setTimeout(function () { b.textContent = 'copier les valeurs'; }, 1200);
+};
+sync();
+
+var T = 0, dist = 0, jumpAt = -99, slowmo = 1, last = 0;
+var spdEl = document.getElementById('spd'), anch = document.getElementById('anch'),
+    skin = document.getElementById('skin');
+document.getElementById('jump').onclick = function () { jumpAt = T; };
+document.getElementById('slow').onclick = function () {
+  slowmo = slowmo > .5 ? .22 : 1; this.textContent = slowmo > .5 ? 'ralenti' : 'vitesse normale';
+};
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  var dt = mn(.04, (ts - last) / 1000) || 0; last = ts;
+  dt *= slowmo; T += dt; AT = T;
+
+  var spd = +spdEl.value / 100 * 22, jp = T - jumpAt, i;
+  air = jp >= 0 && jp < 1.4 ? 1 : 0;
+  dist += spd * dt;
+  B.x = dist;
+  B.y = .92 + (air ? sin(jp / 1.4 * PI) * 1.7 : 0);
+  B.a = air ? sin(jp / 1.4 * PI) * .5 : sin(dist / 1.9 * TAU) * .045;
+  squash = air ? 0 : mx(0, sin(dist / 1.9 * TAU * 2 + 1.2)) * .5;
+  F.a = R.a = -dist / .3;
+
+  if (!seeded) {
+    for (i = 0; i < 5; i++) { var a1 = maneAnchor(i); seedChain(MANE[i], a1[0], a1[1]); }
+    for (i = 0; i < 4; i++) { var a2 = tailAnchor(i); seedChain(TAIL[i], a2[0], a2[1]); }
+    seeded = 1;
+  }
+  var wx = -spd * .32, wy = air ? 1.3 : -spd * .05;
+  for (i = 0; i < 5; i++) { var m1 = maneAnchor(i); chainTick(MANE[i], m1[0], m1[1], dt, wx * (1 + i * .07), wy); }
+  for (i = 0; i < 4; i++) { var t1 = tailAnchor(i); chainTick(TAIL[i], t1[0], t1[1], dt, wx * (.9 + i * .06), wy * .8); }
+
+  var ppm = H / 4.4;
+  X.setTransform(1, 0, 0, 1, 0, 0);
+  var sky = X.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#2b1a52'); sky.addColorStop(1, '#4a2c78');
+  X.fillStyle = sky; X.fillRect(0, 0, W, H);
+  X.setTransform(ppm, 0, 0, -ppm, W * .44 - B.x * ppm, H * .78);
+
+  // piste arc-en-ciel
+  var BANDS = [[0,1.30],[32,1.13],[52,.96],[130,.79],[190,.62],[225,.45],[280,.28]];
+  X.lineCap = 'round';
+  for (i = 0; i < 7; i++) {
+    X.lineWidth = BANDS[i][1]; X.strokeStyle = 'hsl(' + BANDS[i][0] + ',92%,' + (60 + i * 1.6) + '%)';
+    X.beginPath(); X.moveTo(B.x - 14, -.64); X.lineTo(B.x + 14, -.64); X.stroke();
+  }
+  X.save(); X.globalCompositeOperation = 'lighter';
+  X.lineWidth = .11; X.strokeStyle = 'rgba(255,255,255,.6)';
+  X.beginPath(); X.moveTo(B.x - 14, -.09); X.lineTo(B.x + 14, -.09); X.stroke(); X.restore();
+
+  X.globalAlpha = skin.checked ? .35 : 1;
+  drawUni();
+  X.globalAlpha = 1;
+
+  if (skin.checked) {                       // silhouette de reference
+    X.save(); X.translate(B.x, B.y); X.rotate(B.a);
+    X.strokeStyle = 'rgba(120,255,200,.8)'; X.lineWidth = .02;
+    [HEAD, NECK, TORSO].forEach(function (poly) {
+      X.beginPath(); X.moveTo(poly[0][0], poly[0][1]);
+      for (var k = 1; k < poly.length; k++) X.lineTo(poly[k][0], poly[k][1]);
+      X.closePath(); X.stroke();
+    });
+    X.restore();
+  }
+
+  var worstM = 9, worstT = 9;
+  if (anch.checked || 1) {
+    for (i = 0; i < 5; i++) { var p1 = maneAnchor(i), g1 = margin(p1); if (g1 < worstM) worstM = g1;
+      if (anch.checked) { X.fillStyle = g1 >= .06 ? '#ff2b4d' : '#ffe14d';
+        X.beginPath(); X.arc(p1[0], p1[1], .035, 0, TAU); X.fill(); } }
+    for (i = 0; i < 4; i++) { var p2 = tailAnchor(i), g2 = margin(p2); if (g2 < worstT) worstT = g2;
+      if (anch.checked) { X.fillStyle = g2 >= .06 ? '#2bd4ff' : '#ffe14d';
+        X.beginPath(); X.arc(p2[0], p2[1], .035, 0, TAU); X.fill(); } }
+  }
+  function say(el, v) {
+    var e = document.getElementById(el);
+    e.className = 'mg ' + (v >= .06 ? 'ok' : 'ko');
+    e.textContent = v < 0 ? 'RACINE HORS DE LA SILHOUETTE, elle se verra'
+      : 'marge minimale au bord : ' + v.toFixed(3) + ' m' + (v >= .06 ? '  (sous la peau)' : '  TROP AU BORD, il faut au moins 0.060');
+  }
+  say('mgm', worstM); say('mgt', worstT);
+}
+requestAnimationFrame(loop);
+</script></body></html>

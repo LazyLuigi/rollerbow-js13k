@@ -1,0 +1,17 @@
+{
+  "achievements": [
+    { "identifier": "RB_FIRST_FLIP",  "display_name": "First Flip",      "description": "Land your first full rotation.", "stat_requirement": null },
+    { "identifier": "RB_5_FLIPS",     "display_name": "Five Flips",      "description": "Land 5 rotations in a single run.", "stat_requirement": null },
+    { "identifier": "RB_12_FLIPS",    "display_name": "Twelve Flips",    "description": "Land 12 rotations in a single run.", "stat_requirement": null },
+    { "identifier": "RB_COMBO_X25",   "display_name": "Combo x25",       "description": "Reach a x25 combo without blowing a landing.", "stat_requirement": null },
+    { "identifier": "RB_COMBO_X45",   "display_name": "Combo x45",       "description": "Reach a x45 combo without blowing a landing.", "stat_requirement": null },
+    { "identifier": "RB_110_KM_H",    "display_name": "110 km/h",        "description": "Hit 110 km/h down the rainbow.", "stat_requirement": null },
+    { "identifier": "RB_132_KM_H",    "display_name": "132 km/h",        "description": "Hit 132 km/h down the rainbow.", "stat_requirement": null },
+    { "identifier": "RB_750_M",       "display_name": "750 Metres",      "description": "Ride 750 m in a single run.", "stat_requirement": null },
+    { "identifier": "RB_1_5_KM",      "display_name": "1.5 Kilometres",  "description": "Ride 1500 m in a single run.", "stat_requirement": null },
+    { "identifier": "RB_2_5_KM",      "display_name": "2.5 Kilometres",  "description": "Ride 2500 m in a single run.", "stat_requirement": null },
+    { "identifier": "RB_60_COINS",    "display_name": "60 Coins",        "description": "Collect 60 coins in a single run.", "stat_requirement": null },
+    { "identifier": "RB_130_COINS",   "display_name": "130 Coins",       "description": "Collect 130 coins in a single run.", "stat_requirement": null }
+  ],
+  "stats": []
+}

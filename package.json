@@ -1,0 +1,17 @@
+{
+  "name": "rollerbow",
+  "version": "1.0.0",
+  "description": "Une licorne ragdoll devale une piste arc-en-ciel. js13kGames 2026.",
+  "private": true,
+  "scripts": {
+    "build": "./build.sh",
+    "build:best": "./build.sh --best 6",
+    "test": "node test/integrity.js src/index.html && node test/controls.js src/index.html && node test/hud.js src/index.html && node test/wavedash.js",
+    "test:build": "./build.sh && node test/build-smoke.js dist/js13k/index.html",
+    "balance": "node test/balance.js src/index.html"
+  },
+  "devDependencies": {
+    "terser": "^5.31.0",
+    "roadroller": "^2.1.0"
+  }
+}

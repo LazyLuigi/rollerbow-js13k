@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.zip
+*.min.html
+.js13k-check/
+.gen-img/
+.DS_Store
+
+# Le lockfile fige les versions de terser et roadroller, dont depend la taille
+# de sortie. Il est exclu par un .gitignore_global : on le reprend ici.
+!package-lock.json
