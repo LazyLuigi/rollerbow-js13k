@@ -2,6 +2,10 @@
 
 Une licorne ragdoll dévale une piste arc-en-ciel. Entrée pour **js13kGames 2026**, thème « Unicorns and Rainbows ».
 
+![ROLLERBOW](media/gameplay.gif)
+
+Ce GIF n'est pas un enregistrement d'écran : le jeu est **piloté**. `Math.random` est remplacé par un générateur à graine et `requestAnimationFrame` est confisqué, donc la cadence est régulière et deux captures donnent le même fichier. Le pilote est dans `tools/autopilot.js`.
+
 Tout tient dans un fichier HTML de moins de 13 312 octets une fois zippé : pas de framework, pas d'image, pas de fichier son. Le décor, la piste, la licorne et la musique sont générés au code.
 
 ## Jouer
@@ -86,6 +90,15 @@ Ce qui en est repris :
 Ce qui a été ajouté pour une descente infinie : traînée aérodynamique, stabilisateur aérien, portance à assiette plate, amorti de réception, et flips asymétriques.
 
 Le dépôt d'Action SuperCross est *source-available* et non open source. Aucun de son code n'est présent ici. Choisissez votre propre licence pour ce projet.
+
+## Visuels de soumission
+
+Le formulaire demande une cover **800 × 500 px, PNG, ≤ 256 Ko** et une miniature **320 × 320 px, PNG, ≤ 64 Ko** — dimensions exactes, format imposé. Les deux sont dans `media/`, avec l'original non compressé à côté : recompresser une version déjà quantifiée cumule les pertes, il faut toujours repartir de la source.
+
+| fichier | dimensions | poids | PSNR |
+|---|---|---|---|
+| `media/cover.png` | 800 × 500 | 172 678 o | 46,4 dB |
+| `media/thumbnail.png` | 320 × 320 | 52 828 o | 46,4 dB |
 
 ## Structure
 
