@@ -1,28 +1,28 @@
 # Tests
 
-Le jeu tourne sous node avec un canvas simule (`harness.js`). Aucun navigateur requis.
+The game runs under node with a simulated canvas (`harness.js`). No browser required.
 
-| fichier | ce qu'il prouve |
+| file | what it proves |
 |---|---|
-| `harness.js` | doublures canvas et DOM, pilote de reference. Pas un test. |
-| `integrity.js` | aucun NaN ni undefined n'atteint le canvas |
-| `controls.js` | flips asymetriques, saut au tap, tout schuss au maintien |
-| `hud.js` | textes centraux jamais superposes, jamais hors cadre |
-| `balance.js` | morts, distance et vitesse sur 8 pistes |
-| `build-smoke.js` | l'artefact **compresse** demarre et simule |
+| `harness.js` | canvas and DOM doubles, reference driver. Not a test. |
+| `integrity.js` | no NaN or undefined reaches the canvas |
+| `controls.js` | asymmetric flips, jump on tap, tuck on hold |
+| `hud.js` | center texts never overlap, never out of frame |
+| `balance.js` | deaths, distance and speed over 8 tracks |
+| `build-smoke.js` | the **compressed** artifact starts and simulates |
 
-## Pieges rencontres
+## Pitfalls encountered
 
-**Le pilote de test fausse les mesures.** Un pilote qui maintient puis relache le
-tout schuss tres vite declenche un saut a chaque fois, par la regle du tap. Il vole
-alors au-dessus des pieces et fait chuter le taux de ramassage de 99 % a 47 %.
-`levelPilot` ne touche jamais au schuss pour cette raison.
+**The test driver skews the measurements.** A driver that holds then releases
+the tuck very quickly triggers a jump every time, by the tap rule. It then flies
+above the coins and drops the pickup rate from 99% to 47%.
+`levelPilot` never touches the tuck for that reason.
 
-**Un test qui ne teste rien.** Une comparaison A/B dont le motif de desactivation
-ne correspond plus au code renvoie deux resultats identiques, ce qui ressemble a
-« la fonctionnalite ne sert a rien ». Faire echouer le test quand le motif est
-introuvable, jamais l'ignorer silencieusement.
+**A test that tests nothing.** An A/B comparison whose disable pattern no longer
+matches the code returns two identical results, which looks like
+"the feature is useless". Make the test fail when the pattern is not
+found, never ignore it silently.
 
-**Mesurer la mauvaise variable.** La vitesse totale a l'atterrissage est dominee
-par l'horizontale et ne bouge pas quand on ajoute une portance verticale. C'est la
-composante verticale qu'il fallait suivre.
+**Measuring the wrong variable.** Total speed at landing is dominated by the
+horizontal one and does not move when vertical lift is added. It is the vertical
+component that had to be tracked.

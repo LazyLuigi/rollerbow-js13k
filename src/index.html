@@ -8,10 +8,10 @@ canvas{display:block;width:100%;height:100%}
 "use strict";
 // =====================================================================
 //  ROLLERBOW  -  js13kGames 2026  -  theme: Unicorns and Rainbows
-//  Une licorne ragdoll en patins a roulettes devale une piste arc-en-ciel.
-//  Modele physique repris d'Action SuperCross / Elasto Mania :
-//  3 corps rigides (chassis + 2 patins) relies par des tiges elastiques,
-//  contact roulant a 0/1/2 points d'appui, pas de temps fixe de 3 ms.
+//  A ragdoll unicorn on roller skates rides down a rainbow track.
+//  Physics model taken from Action SuperCross / Elasto Mania:
+//  3 rigid bodies (chassis + 2 skates) linked by spring rods,
+//  rolling contact on 0/1/2 support points, fixed 3 ms timestep.
 // =====================================================================
 
 var M = Math, PI = M.PI, TAU = 6.2831853, cos = M.cos, sin = M.sin, abs = M.abs,
@@ -34,7 +34,7 @@ function resize() {
   C.style.width = innerWidth + 'px'; C.style.height = innerHeight + 'px';
 }
 var CL = [], MTN = [[], []], SKS = [], SPD = [];
-function mkBG() {                       // geometrie du decor calculee une fois, pas par frame
+function mkBG() {                       // background geometry computed once, not per frame
   var r = rng(1717), i, j, sc;
   CL = [];
   for (i = 0; i < 16; i++) {
@@ -52,34 +52,34 @@ function mkBG() {                       // geometrie du decor calculee une fois,
 }
 addEventListener('resize', function () { resize(); mkBG(); }); resize(); mkBG();
 
-// ---------- CONSTANTES PHYSIQUES (valeurs reprises d'Across) ----------
+// ---------- PHYSICS CONSTANTS (values taken from Across) ----------
 var G = 10, DT = 0.003;
-var K = 10000, CDA = 1000;                 // raideur / amortissement de la tige
+var K = 10000, CDA = 1000;                 // rod stiffness / damping
 var PEN = .02, SEPV = .01, MERGE = .1;
 var LOKET = 12, LOKETG = 6.5, OMEGAVALT = 3, KICKDUR = .1, KICKCD = .32;
 var DRIVE = 120, TUCKDRIVE = 280, MAXSPIN = 46;
-var STAB = 260, DAMP = 150;                // stabilisateur aerien
+var STAB = 260, DAMP = 150;                // air stabilizer
 var STABG = 300, DAMPG = 170, HORNV = 4.5, HORNT = .4;
-var GLIDE = 9, GLIDEW = .20;               // portance quand l'assiette est a plat en vol
-var FLIPX = 1.15, FLIPY = 1.35, FLIPB = .65, FLIPVY = 6;   // flips asymetriques
-var JMP = 9.5, TAPMAX = .2, TUCKMIN = .12; // saut sur tap simultane, boule sur maintien
-var TRAMPSPIN = 6;                         // secousse du trampoline : +/-3 rad/s, soit 40 deg max a rattraper  // rappel au sol, seuil de gamelle a la corne
+var GLIDE = 9, GLIDEW = .20;               // lift when the pitch attitude is flat in flight
+var FLIPX = 1.15, FLIPY = 1.35, FLIPB = .65, FLIPVY = 6;   // asymmetric flips
+var JMP = 9.5, TAPMAX = .2, TUCKMIN = .12; // jump on simultaneous tap, tuck on hold
+var TRAMPSPIN = 6;                         // trampoline jolt: +/-3 rad/s, so 40 deg max to recover  // ground restoring torque, horn crash threshold
 var DRAG = 1.1, DRAGTUCK = .42;
-var OFX = .75, OFY = -.62;                 // patins dans le repere du corps
-var HDX = .60, HDY = .92, HDR = .22;       // capteur de mort : la tete
+var OFX = .75, OFY = -.62;                 // skates in the body frame
+var HDX = .60, HDY = .92, HDR = .22;       // death sensor: the head
 var S = .7, NT = 20000;
 
-// ---------- PISTE ----------
+// ---------- TRACK ----------
 var ys = [], hole = [], stars = [];
 function mkTrack(seed) {
   var r = rng(seed), y = 0, i = 0, st = [], d = 0;
   ys = []; hole = []; stars = [];
-  // brique de base : n echantillons dont la pente est donnee par f(t, j)
+  // base brick: n samples whose slope is given by f(t, j)
   function put(n, f) { for (var j = 0; j < n && i < NT; j++, i++) { ys[i] = y; hole[i] = 0; y += f(j / n, j) * S; } }
   function gap(n) { var g0 = i; for (var j = 0; j < n && i < NT; j++, i++) { ys[i] = y; hole[i] = 1; y -= (.3 + j * .13) * S; } return [g0, n]; }
   function star(k, h, t) { if (ys[k] !== undefined && !hole[k]) st.push({ x: k * S, y: ys[k] + h, g: 0, t: t || 0, c: 0 }); }
   function coins(k, n, h) { for (var q = 0; q < n; q++) star(k + q * 2, h + sin(q / (n - 1) * PI) * .55, 0); }
-  function arcOver(G) {                              // chapelet d'etoiles au dessus du vide
+  function arcOver(G) {                              // string of stars above the gap
     for (var j = 0; j <= 4; j++) {
       var t = j / 4;
       st.push({ x: (G[0] + t * G[1]) * S, y: ys[G[0]] + 1.15 + sin(t * PI) * (1.1 + G[1] * .09) - t * G[1] * .30 * S, g: 0, t: 0, c: 0 });
@@ -87,8 +87,8 @@ function mkTrack(seed) {
   }
   // --- modules ---
   function run(n, amp) { var p = 9 + r() * 16, ph = r() * TAU; put(n, function (t, j) { return -.28 + sin(j / p * TAU + ph) * amp; }); }
-  function apron(n) { put(n, function (t) { return -.20 + t * .05; }); }          // elan avant un saut
-  function lip(sl) { put(9, function (t) { return -.16 + t * t * (sl + .16); }); } // tremplin qui se releve
+  function apron(n) { put(n, function (t) { return -.20 + t * .05; }); }          // run-up before a jump
+  function lip(sl) { put(9, function (t) { return -.16 + t * t * (sl + .16); }); } // takeoff ramp that kicks up
   function land(n, sl) { put(n, function (t) { return sl + t * (sl < -.5 ? .5 : .25); }); }
   function table(n) { lip(.5); put(n, function () { return -.03; }); put(5, function (t) { return -.2 - t * .9; }); }
   function stairs(n) { for (var k = 0; k < n; k++) { put(5, function () { return -.05; }); put(2, function () { return -1.5 - d; }); } }
@@ -96,10 +96,10 @@ function mkTrack(seed) {
   function plunge() { put(18, function (t) { return -(.28 + (1.1 + d * .5) * sin(t * PI)); }); }
   function wall() { put(11, function (t) { return -.18 + t * 1.15; }); put(3, function () { return .04; }); }
 
-  run(80, .09);                                       // depart : on apprend a rouler
-  // Intro : on apprend a rouler, puis a ramasser, et le trampoline ferme la marche.
-  // Il projette a 68 m, donc rien ne doit etre pose derriere lui.
-  coins(30 + (r() * 6 | 0), 6, 1.15);                 // la licorne apparait a l'index 26
+  run(80, .09);                                       // start: you learn to roll
+  // Intro: you learn to roll, then to collect, and the trampoline comes last.
+  // It launches you 68 m, so nothing may be placed after it.
+  coins(30 + (r() * 6 | 0), 6, 1.15);                 // the unicorn spawns at index 26
   if (r() < .5) star(52 + (r() * 6 | 0), .95, 1); else coins(52, 4, 1.35);
   coins(64 + (r() * 8 | 0), 5, 1.1 + r() * .5);
   if (r() < .65) star(92, .34, 2);
@@ -112,33 +112,33 @@ function mkTrack(seed) {
       if (r() < .38) star(i - 8, .95, 1);
       if (r() < .3) star(i - 5, .34, 2);
     }
-    else if (f < .40) {                               // SAUT SIMPLE : elan, tremplin, vide, reception
+    else if (f < .40) {                               // SINGLE JUMP: run-up, ramp, gap, landing
       apron(9); lip(.45 + r() * .25);
       G = gap(7 + (r() * (5 + d * 9) | 0)); arcOver(G);
       land(26, -.62); coins(i - 20, 5, 1.15); if (r() < .5) star(i - 6, .95, 1);
-    } else if (f < .52) {                             // DOUBLE : deux tremplins d'affilee
+    } else if (f < .52) {                             // DOUBLE: two ramps in a row
       apron(7); lip(.42);
       gap(5 + (d * 5 | 0)); land(11, -.5);
       lip(.55); G = gap(7 + (r() * (5 + d * 8) | 0)); arcOver(G);
       land(24, -.6); coins(i - 18, 5, 1.15); if (r() < .4) star(i - 5, .95, 1);
-    } else if (f < .64) {                             // TABLE : plateau a franchir
+    } else if (f < .64) {                             // TABLE: a flat top to clear
       apron(6); table(9 + (r() * 8 | 0)); land(15, -.45);
       coins(i - 26, 6, 1.2); star(i - 34, .36, 2);
     } else if (f < .74) { stairs(3 + (r() * 3 | 0)); coins(i - 14, 5, 1.25); }
     else if (f < .84) { whoops(3 + (r() * 3 | 0)); coins(i - 20, 8, 1.3); }
     else if (f < .93) { plunge(); land(12, -.35); coins(i - 9, 5, 1.2); star(i - 3, .95, 1); }
-    else {                                            // MUR : on le grimpe et on decolle du sommet
+    else {                                            // WALL: you climb it and take off from the top
       apron(6); star(i - 4, .95, 1); wall(); G = gap(5 + (r() * (4 + d * 7) | 0)); arcOver(G);
       land(24, -.58);
     }
-    if (i === k0) put(6, function () { return -.28; }); // securite anti boucle infinie
+    if (i === k0) put(6, function () { return -.28; }); // infinite loop guard
   }
   st.sort(function (a, b) { return a.x - b.x; });
   stars = st;
 }
 function groundY(x) { var i = x / S | 0; return ys[i] === undefined ? 0 : lerp(ys[i], ys[i + 1] === undefined ? ys[i] : ys[i + 1], x / S - i); }
 
-// ---------- CONTACT CERCLE / PISTE ----------
+// ---------- CIRCLE / TRACK CONTACT ----------
 var _c = [0, 0, 0, 0];
 function contacts(x, y, rad) {
   var i0 = (x - rad) / S | 0, i1 = (x + rad) / S | 0, n = 0, i, j;
@@ -206,7 +206,7 @@ function step(k, Fx, Fy, Mm, useC) {
   k.x += k.vx * DT; k.y += k.vy * DT;
 }
 
-// ---------- LA LICORNE ----------
+// ---------- THE UNICORN ----------
 var B, F, R, kickDir, kickT, kickOm, kickAmp, lastKick, air, airT, spinA, landSpin, landAir, landErr, hornHit, hornV, hornT, cush, jmp, bothT, bothP, tuckV;
 var oF = [0, 0, 0, 0, 0], oR = [0, 0, 0, 0, 0];
 function rod(sk, ox, oy, Mw, o) {
@@ -231,7 +231,7 @@ function rod(sk, ox, oy, Mw, o) {
   o[4] = Mb - (Ftx * -ky + Fty * kx);
 }
 var LX = 0, LY = 0;
-function loc2(ox, oy) {                 // variante sans allocation pour le chemin chaud
+function loc2(ox, oy) {                 // allocation-free variant for the hot path
   var ca = cos(B.a), sa = sin(B.a);
   LX = B.x + ca * ox - sa * oy; LY = B.y + sa * ox + ca * oy;
 }
@@ -245,19 +245,19 @@ function physTick(t, kL, kR, tuck) {
 
   var v = hyp(B.vx, B.vy), dg = (tuck ? DRAGTUCK : DRAG) * (boostT > 0 ? .45 : 1) * v / B.m * DT;
   B.vx -= B.vx * dg; B.vy -= B.vy * dg;
-  // assiette a plat en vol : la licorne fait resistance, comme un wingsuit.
-  // Pleine portance sous 5 deg, nulle au dela de 11.5 deg.
+  // flat pitch attitude in flight: the unicorn resists the air, like a wingsuit.
+  // Full lift under 5 deg, none beyond 11.5 deg.
   glide = air && B.vy < 0 ? clamp((GLIDEW - abs(na)) * 9, 0, 1) : 0;
   if (glide > 0) {
     var lf = mn(.5, glide * GLIDE * abs(B.vy) / B.m * DT), dvy = -B.vy * lf;
-    B.vy += dvy; B.vx += dvy * .25;       // un peu de chute reconvertie en avance
+    B.vy += dvy; B.vx += dvy * .25;       // a little of the fall converted back into forward speed
   }
-  if (boostT > 0) {                       // plafonne : sinon la vitesse part a 200 km/h
+  if (boostT > 0) {                       // capped: otherwise the speed runs away to 200 km/h
     boostT -= DT;
     if (v < 32) { B.vx += 18 * DT; F.vx += 18 * DT; R.vx += 18 * DT; }
   }
 
-  // poussee du patineur : elle s'efface quand on cabre, sinon boucle de retroaction
+  // skater push: it fades out when you rear up, otherwise feedback loop
   var dr = (tuck ? TUCKDRIVE : DRIVE) * clamp(1 - (pitch - .35) * 1.8, 0, 1), Mf = 0, Mr = 0;
   if (R.om > -MAXSPIN) Mr = -dr;
   if (F.om > -MAXSPIN) Mf = -dr * .5;
@@ -267,24 +267,24 @@ function physTick(t, kL, kR, tuck) {
   rod(R, -OFX, OFY, Mr, oR);
 
   if (air) {
-    // sin() plutot que l'angle brut : au dela de 90 deg le rappel aide le salto
+    // sin() rather than the raw angle: beyond 90 deg the restoring torque helps the backflip
     B.om -= (sin(B.a) * STAB + (abs(B.om) < 4 ? B.om * DAMP : 0)) / B.th * DT;
     airT += DT; spinA += B.om * DT;
   } else {
     if (airT > .3) {
       landSpin = spinA; landAir = airT; landErr = pitch;
-      if (abs(pitch) < .35) {                        // recu sur les pattes, assiette tenue :
-        cush = .5; B.om *= .3; B.vy *= .4;           // on absorbe le coup de fouet
+      if (abs(pitch) < .35) {                        // landed on the legs, pitch attitude held:
+        cush = .5; B.om *= .3; B.vy *= .4;           // absorb the whiplash
         ring(B.x, B.y - .6, .35, 9, .45, '150,255,210', .11);
       }
     }
     airT = 0; spinA = 0;
-    // le cavalier se rattrape : rappel vers la pente, renforce si on part au tonneau
+    // the rider catches himself: pull back toward the slope, stronger if you start to barrel roll
     B.om -= (sin(pitch) * STABG * (1 + 2 * clamp(abs(pitch) - .6, 0, 1)) + B.om * DAMPG) / B.th * DT;
   }
 
-  // gauche = on releve la roue avant, droite = on releve la roue arriere.
-  // Maintenir la touche relance un coup tous les KICKCD : l'angle monte toujours.
+  // left = lift the front wheel, right = lift the rear wheel.
+  // Holding the key fires another kick every KICKCD: the angle keeps climbing.
   var nk = (kL || kR) && !(kL && kR) && t > lastKick + KICKCD;
   var free = airT > .35;
   if (kickDir && (nk || t > kickT + KICKDUR)) {
@@ -299,27 +299,27 @@ function physTick(t, kL, kR, tuck) {
   }
   if (nk) {
     kickOm = B.om; kickT = t; lastKick = t;
-    kickAmp = free ? LOKET : LOKETG;  // pleine puissance seulement en vol etabli
+    kickAmp = free ? LOKET : LOKETG;  // full power only in established flight
     if (kR) {
       kickDir = -1; B.om -= kickAmp;
-      if (air) B.vx += FLIPX;                          // perilleux avant : on pique, on accelere
+      if (air) B.vx += FLIPX;                          // frontflip: you dive, you speed up
     } else {
       kickDir = 1; B.om += kickAmp;
-      if (air) { if (B.vy < FLIPVY) B.vy += FLIPY; B.vx -= FLIPB; }   // salto arriere : on s'ouvre, on monte
+      if (air) { if (B.vy < FLIPVY) B.vy += FLIPY; B.vx -= FLIPB; }   // backflip: you open up, you rise
     }
     swoosh = 1; swD = kR ? -1 : 1;
     sfx(180 + rnd() * 50, .06, 'triangle', .04);
   }
   if (cush > 0) cush -= DT;
-  if (!air && B.vy < 1) jmp = 1;                       // pose au sol, pas en pleine detente : saut rearme
+  if (!air && B.vy < 1) jmp = 1;                       // down on the ground, not mid-launch: jump rearmed
   loc2(HDX, HDY); var hgi = LX / S | 0;
-  // test "sous la surface" et pas seulement "proche" : a grande vitesse la corne
-  // traversait la piste en un pas et ressortait dessous sans etre vue.
+  // test "below the surface" and not just "close": at high speed the horn
+  // crossed the track in one step and came out underneath unseen.
   hornHit = hgi >= 0 && hgi < NT && !hole[hgi] && LY - HDR < groundY(LX);
   hornV = v;
   if (hornHit) {
     hornT += DT;
-    // sous le seuil ce n'est pas une gamelle mais un raclement : ca freine et on se redresse
+    // below the threshold it is not a crash but a scrape: it brakes and you straighten up
     if (v <= HORNV || cush > 0) {
       B.om -= (sin(pitch) * 900 + B.om * 260) / B.th * DT;
       B.vx -= B.vx * 2.4 * DT; B.vy -= B.vy * 2.4 * DT;
@@ -331,7 +331,7 @@ function physTick(t, kL, kR, tuck) {
 }
 
 // ---------- RAGDOLL ----------
-// 0 tete, 1 garrot, 2 poitrail, 3 croupe, 4 patin avant, 5 patin arriere
+// 0 head, 1 withers, 2 chest, 3 rump, 4 front skate, 5 rear skate
 var LOC = [[HDX, HDY], [.34, .28], [.42, -.04], [-.50, .02], [OFX, OFY], [-OFX, OFY]];
 var LNK = [[0, 1], [1, 2], [2, 3], [1, 3], [0, 2], [2, 4], [3, 5], [1, 4], [2, 5], [4, 5]];
 var rag = [], ragLen = [];
@@ -377,10 +377,10 @@ function ragTick(dt) {
   }
 }
 
-// ---------- CRINIERE ET QUEUE ----------
+// ---------- MANE AND TAIL ----------
 function mkChain(n, seg) { var a = [], i; for (i = 0; i < n; i++) a.push({ x: 0, y: 0, px: 0, py: 0, s: seg }); return a; }
-// Criniere et queue en meches. Les racines sont glissees sous la peau et la
-// criniere est dessinee avant la tete, donc aucune couture n'apparait.
+// Mane and tail as strands. The roots are slipped under the skin and the
+// mane is drawn before the head, so no seam shows.
 var PM = [.28, .83, .15, .14], PT = [-.47, .13, .045, -.035], NU = [.377, .927];
 var MANE = [], TAIL = [], i9, c9;
 for (i9 = 0; i9 < 5; i9++) {
@@ -424,8 +424,8 @@ function sfx(f, d, ty, v) {
     o.stop(AC.currentTime + d);
   } catch (e) { }
 }
-// RAINBOW DRIVE : eurobeat majeur, 120 BPM, do majeur.
-// Quatre au sol avec sidechain, basse qui rebondit sur les contretemps, lead en cloches.
+// RAINBOW DRIVE: eurobeat in a major key, 120 BPM, C major.
+// Four on the floor with sidechain, bass bouncing on the offbeats, bell lead.
 function hz(n) { return 440 * M.pow(2, (n - 69) / 12); }
 function mt(t, f, dur, ty, vol, dest, det, atk) {
   var o = AC.createOscillator(), g = AC.createGain();
@@ -436,7 +436,7 @@ function mt(t, f, dur, ty, vol, dest, det, atk) {
   g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   o.start(t); o.stop(t + dur + .03);
 }
-function mf(t, f, dur, vol, cut, q) {           // basse filtree
+function mf(t, f, dur, vol, cut, q) {           // filtered bass
   var o = AC.createOscillator(), g = AC.createGain(), bq = AC.createBiquadFilter();
   o.type = 'sawtooth'; o.frequency.value = f;
   bq.type = 'lowpass'; bq.Q.value = q;
@@ -448,7 +448,7 @@ function mf(t, f, dur, vol, cut, q) {           // basse filtree
   g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   o.start(t); o.stop(t + dur + .03);
 }
-function mn2(t, dur, vol, cut) {                // bruit filtre : charley et clap
+function mn2(t, dur, vol, cut) {                // filtered noise: hi-hat and clap
   var sc = AC.createBufferSource(), g = AC.createGain(), bq = AC.createBiquadFilter();
   sc.buffer = NB; sc.loop = 1;
   bq.type = 'highpass'; bq.frequency.value = cut;
@@ -457,7 +457,7 @@ function mn2(t, dur, vol, cut) {                // bruit filtre : charley et cla
   g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   sc.start(t); sc.stop(t + dur + .03);
 }
-function mk(t) {                                // grosse caisse + sidechain
+function mk(t) {                                // kick drum + sidechain
   var o = AC.createOscillator(), g = AC.createGain();
   o.type = 'sine';
   o.frequency.setValueAtTime(165, t);
@@ -467,7 +467,7 @@ function mk(t) {                                // grosse caisse + sidechain
   o.connect(g); g.connect(musG); o.start(t); o.stop(t + .32);
   duck.gain.setValueAtTime(.32, t); duck.gain.linearRampToValueAtTime(1, t + .2);
 }
-function mch(t, root, iv, dur, vol, det) {      // accord supersaw sur le bus duck
+function mch(t, root, iv, dur, vol, det) {      // supersaw chord on the duck bus
   for (var k = 0; k < iv.length; k++) {
     mt(t, hz(root + iv[k]), dur, 'sawtooth', vol, duck, -det, .02);
     mt(t, hz(root + iv[k]), dur, 'sawtooth', vol, duck, det, .02);
@@ -497,7 +497,7 @@ function startMusic() {
   var n = AC.sampleRate, bf = AC.createBuffer(1, n, AC.sampleRate), d = bf.getChannelData(0);
   for (var i = 0; i < n; i++) d[i] = rnd() * 2 - 1;
   NB = bf;
-  ST16 = 60 / 120 / 4;                          // 120 BPM, une double croche
+  ST16 = 60 / 120 / 4;                          // 120 BPM, one sixteenth note
   musN = AC.currentTime + .1; musS = 0;
   setInterval(function () {
     if (!AC || muted) return;
@@ -506,7 +506,7 @@ function startMusic() {
   }, 70);
 }
 
-// ---------- ENTREES ----------
+// ---------- INPUTS ----------
 var keys = {}, tL = 0, tR = 0;
 addEventListener('keydown', function (e) {
   var k = e.key.toLowerCase();
@@ -535,7 +535,7 @@ function poke() {
   if (mode === 0 || (mode === 2 && deadT > 1)) start();
 }
 
-// ---------- ETAT ----------
+// ---------- STATE ----------
 var mode = 0, T = 0, AT = 0, tScale = 1, leadX = 0, trailT = 0, fps = 60, LOW = 0, boostT = 0, deadT = 0, dist = 0, sc = 0, score = 0, best = 0, bestD = 0;
 var blood = [], splat = [], lost = -1, GORE = 1, glide = 0, pend = 0, pendT = 0, pSpin = 0, pAir = 0, pErr = 0, squash = 0, shake = 0, flash = 0, parts = [], pops = [], trail = [], starIdx = 0, combo = 0, comboT = 0;
 var rings = [], wtx = [], swoosh = 0, swD = 1, PPM = 40, SHX = 0, SHY = 0, trickT = 0;
@@ -561,8 +561,8 @@ function start() { spawn(rnd() * 1e9 | 0); deadT = 0; slowmo = 1; flash = .5; mo
 
 var ACHT = 'FIRST FLIP|5 FLIPS|12 FLIPS|COMBO x25|COMBO x45|110 KM/H|132 KM/H|750 M|1.5 KM|2.5 KM|60 COINS|130 COINS'.split('|');
 var ACHV = [0, 1, 0, 5, 0, 12, 1, 25, 1, 45, 2, 110, 2, 132, 3, 750, 3, 1500, 3, 2500, 4, 60, 4, 130];
-// Succes de la course en cours : tout est remis a zero a chaque depart.
-var toastQ = [], toastT = 0, TOASTD = 3, ach = 0, achN = 0, st5 = [0, 0, 0, 0, 0];  // tours, combo, km/h, distance, pieces
+// Achievements for the current run: everything is reset at each start.
+var toastQ = [], toastT = 0, TOASTD = 3, ach = 0, achN = 0, st5 = [0, 0, 0, 0, 0];  // turns, combo, km/h, distance, coins
 function chkAch() {
   for (var i = 0; i < 12; i++) if (!(ach >> i & 1) && st5[ACHV[i * 2]] >= ACHV[i * 2 + 1]) {
     ach |= 1 << i; achN++; sc += 400;
@@ -571,15 +571,15 @@ function chkAch() {
     sfx(1046, .12, 'triangle', .05); sfx(1568, .2, 'triangle', .04);
   }
 }
-function pop(t, c, b) {                                // 4 lignes fixes : ni superposition ni derive
+function pop(t, c, b) {                                // 4 fixed lines: no overlap, no drift
   var k, i;
   for (k = 0; k < 4; k++) { for (i = 0; i < pops.length && pops[i].k !== k; i++); if (i >= pops.length) break; }
-  if (k > 3) k = pops.shift().k;                       // tout est pris : le plus ancien cede sa ligne
+  if (k > 3) k = pops.shift().k;                       // all taken: the oldest gives up its line
   pops.push({ t: t, c: c, l: 1.5, y: -k * 46, b: b || 0, d: pops.length ? .1 : 0, k: k });
 }
 function ring(x, y, r, rv, l, c, w) { rings.push({ x: x, y: y, r: r, rv: rv, l: l, lm: l, c: c, w: w }); }
 function wtext(x, y, t, c) { wtx.push({ x: x, y: y, t: t, c: c, l: 1 }); }
-function award() {                                   // la figure est validee
+function award() {                                   // the trick is validated
   var turns = abs(pSpin) / TAU | 0, i, pts;
   if (turns > 0) {
     combo++; comboT = 2.4;
@@ -591,19 +591,19 @@ function award() {                                   // la figure est validee
     wtext(B.x, B.y + 1.2, '+' + pts, '#ffe9a8');
     flash = mx(flash, .22);
     if (turns > 1) trickT = .45;
-    boostT = mx(boostT, .22 + turns * .22);            // figure reussie : relance offerte
+    boostT = mx(boostT, .22 + turns * .22);            // trick landed: free speed boost
   } else if (pAir > .8) {
-    if (abs(pErr) < .28) {                           // assiette alignee sur la pente
+    if (abs(pErr) < .28) {                           // pitch attitude aligned with the slope
       combo++; comboT = 2.4; pts = 70 * combo; sc += pts;
       pop('PERFECT LANDING  +' + pts, '#a8ffd6', 1);
       ring(B.x, B.y, .4, 10, .5, '150,255,210', .11);
       wtext(B.x, B.y + 1.2, '+' + pts, '#a8ffd6');
-      boostT = mx(boostT, .28);                        // reception propre : petite relance
+      boostT = mx(boostT, .28);                        // clean landing: small speed boost
       sfx(700, .14, 'triangle', .05); sfx(1050, .18, 'sine', .04);
     } else { sc += 40; pop('AIRTIME  +40', '#bff7ff', 0); }
   }
 }
-function botch() {                                   // reception ratee : la figure est perdue
+function botch() {                                   // missed landing: the trick is lost
   pend = 0;
   if (abs(pSpin) > 2 || pAir > .7) {
     pop('TRICK LOST', '#a08fc4', 0);
@@ -611,7 +611,7 @@ function botch() {                                   // reception ratee : la fig
     combo = 0; comboT = 0;
   }
 }
-function bleed(x, y, n, sp, dx, dy) {                  // giclee
+function bleed(x, y, n, sp, dx, dy) {                  // blood spurt
   if (!GORE) return;
   for (var i = 0; i < n; i++) {
     var a = rnd() * TAU, q = rnd(), s = sp * (.15 + q * q);
@@ -630,7 +630,7 @@ function die() {
   mode = 2; deadT = 0; slowmo = .3;
   makeRagdoll();
   lost = -1;
-  if (GORE) {                                          // le membre qui a touche part en morceau
+  if (GORE) {                                          // the limb that hit comes off
     var LI = [0, 4, 5], dp = .45, q3;
     for (q3 = 0; q3 < 3; q3++) {
       var j3 = LI[q3], d3 = rag[j3].y - groundY(rag[j3].x);
@@ -656,7 +656,7 @@ function die() {
   if (score > best) { best = score; wdScore('score-v1', score); }
 }
 
-// ---------- MISE A JOUR ----------
+// ---------- UPDATE ----------
 function update(dt) {
   var i, p;
   if (mode !== 2) {
@@ -664,10 +664,10 @@ function update(dt) {
     var kL = live && (keys.arrowleft || keys.a || keys.q || tL),
         kR = live && (keys.arrowright || keys.d || tR),
         both = live && ((kL && kR) || keys.arrowdown || keys.s || keys[' ']);
-    // appui simultane : bref = saut, maintenu = tout schuss
+    // simultaneous press: short = jump, held = tuck
     if (both) bothT += dt;
     else {
-      if (bothP && bothT < TAPMAX && jmp) {            // tap relache : saut, au sol ou en l'air
+      if (bothP && bothT < TAPMAX && jmp) {            // tap released: jump, on the ground or in the air
         jmp = 0;
         B.vy = mx(B.vy, 0) + JMP; F.vy = mx(F.vy, 0) + JMP; R.vy = mx(R.vy, 0) + JMP;
         ring(B.x, B.y - .5, .3, 8, .4, '190,235,255', .1);
@@ -693,10 +693,10 @@ function update(dt) {
     }
     impact = 0;
 
-    // une figure ne compte pas tant que la reception n'a pas tenu 200 ms
+    // a trick does not count until the landing has held for 200 ms
     if (landAir) { pend = 1; pendT = .2; pSpin = landSpin; pAir = landAir; pErr = landErr; landSpin = 0; landAir = 0; }
     if (pend && live) {
-      if (hornHit) botch();                          // la corne racle : reception eclatee
+      if (hornHit) botch();                          // the horn scrapes: landing blown
       else { pendT -= dt; if (pendT <= 0) { pend = 0; award(); } }
     } else if (pend) pend = 0;
     if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
@@ -715,7 +715,7 @@ function update(dt) {
       p = stars[i];
       if (p.g) continue;
       var ddx = p.x - B.x, ddy = p.y - B.y - .3, dd2 = ddx * ddx + ddy * ddy;
-      if (!p.t && dd2 < 7 && dd2 > 2) {                  // aimant a pieces facon Tiny Wings
+      if (!p.t && dd2 < 7 && dd2 > 2) {                  // coin magnet, Tiny Wings style
         var pull = dt * 9 * (1 - dd2 / 7);
         p.x -= ddx * pull; p.y -= ddy * pull;
       }
@@ -724,7 +724,7 @@ function update(dt) {
           p.g = 1; p.c = 1;
           var bv = 15 + mn(6, hyp(B.vx, B.vy) * .2);
           B.vy = mx(B.vy, 0) + bv; F.vy = mx(F.vy, 0) + bv; R.vy = mx(R.vy, 0) + bv;
-          B.om += (rnd() - .5) * TRAMPSPIN;             // il faut se rattraper
+          B.om += (rnd() - .5) * TRAMPSPIN;             // you have to recover
           shake = mn(20, shake + 9); flash = mx(flash, .25);
           ring(p.x, p.y, .4, 11, .55, '160,255,220', .14);
           burst(p.x, p.y + .2, 22, 7, 150);
@@ -741,7 +741,7 @@ function update(dt) {
           if (live) { sc += 60; pop('BOOST!  +60', '#7fe8ff', 1); }
           sfx(300, .3, 'sawtooth', .06); sfx(900, .22, 'square', .04);
         }
-      } else if (dd2 < 2.6) {                            // PIECE
+      } else if (dd2 < 2.6) {                            // COIN
         p.g = 1;
         if (live) {
           combo++; comboT = 2.4; sc += 25 * combo; st5[4]++;
@@ -755,13 +755,13 @@ function update(dt) {
     }
 
     var gi = B.x / S | 0, fell = ys[gi] !== undefined && B.y < ys[gi] - 14;
-    if (hornHit && hornV <= HORNV && live && rnd() < .3) {   // raclement : etincelles, pas de mort
+    if (hornHit && hornV <= HORNV && live && rnd() < .3) {   // scrape: sparks, no death
       var hp2 = loc(HDX, HDY);
       burst(hp2[0], hp2[1] - .1, 2, 2.5, 45);
       if (rnd() < .25) sfx(220, .08, 'sawtooth', .03);
     }
     if ((hornHit && cush <= 0 && (hornV > HORNV || hornT > HORNT)) || fell) {
-      if (live) die(); else spawn(rnd() * 1e9 | 0);    // ecran titre : on relance la demo
+      if (live) die(); else spawn(rnd() * 1e9 | 0);    // title screen: restart the demo
     }
 
     var spd = hyp(B.vx, B.vy);
@@ -776,10 +776,10 @@ function update(dt) {
     deadT += dt;
     slowmo = lerp(slowmo, 1, mn(1, dt * 1.5));
     for (i = 0; i < 3; i++) ragTick(dt / 3);
-    if (GORE && deadT < 1.1 && rnd() < .5)             // pulsations arterielles
+    if (GORE && deadT < 1.1 && rnd() < .5)             // arterial pulses
       bleed(rag[0].x, rag[0].y, 4, 5.5, (rag[0].x - rag[0].px) * 22, 2.5);
     if (GORE && rnd() < .3) bleed(rag[3].x, rag[3].y, 2, 2.4, 0, .5);
-    if (GORE && lost >= 0 && rnd() < .7) {             // le moignon
+    if (GORE && lost >= 0 && rnd() < .7) {             // the stump
       var st3 = rag[lost ? lost - 2 : 1];
       bleed(st3.x, st3.y, 3, 4.5, 0, 1.5);
     }
@@ -793,7 +793,7 @@ function update(dt) {
   camX = lerp(camX, tgx, mn(1, dt * ff)); camY = lerp(camY, tgy, mn(1, dt * ff * .7));
   zoom = lerp(zoom, mode === 2 ? 1.25 : (1 - clamp(boostT, 0, 1) * .11) / (1 + hyp(B.vx, B.vy) * .013), mn(1, dt * 2.2));
 
-  // chaines cosmetiques
+  // cosmetic chains
   var wx9 = mode === 2 ? 0 : -B.vx * .3, wy9 = mode === 2 ? 0 : -B.vy * .2, a9;
   for (i9 = 0; i9 < 5; i9++) {
     a9 = mode === 2 ? [rag[0].x, rag[0].y] : mAnc(i9);
@@ -808,7 +808,7 @@ function update(dt) {
     p = blood[i];
     p.vy -= 17 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .994;
     var bi = p.x / S | 0, bg = groundY(p.x);
-    if (!hole[bi] && p.y < bg + .03 && p.vy < 0) {      // elle s'ecrase sur l'arc-en-ciel
+    if (!hole[bi] && p.y < bg + .03 && p.vy < 0) {      // it splatters on the rainbow
       if (splat.length < 130) splat.push({ x: p.x, y: bg, r: p.r * (1.7 + rnd() * 1.5), a: .45 + rnd() * .4 });
       blood.splice(i, 1);
     } else if (p.y < bg - 40) blood.splice(i, 1);
@@ -820,7 +820,7 @@ function update(dt) {
   }
   for (i = pops.length - 1; i >= 0; i--) {
     p = pops[i];
-    if (p.d > 0) { p.d -= dt; continue; }               // pas encore entre en scene
+    if (p.d > 0) { p.d -= dt; continue; }               // has not entered the scene yet
     p.l -= dt; p.y += dt * 12;
     if (p.l <= 0) pops.splice(i, 1);
   }
@@ -847,8 +847,8 @@ function palette(p) {
   for (j = 0; j < 3; j++) for (k = 0; k < 3; k++) pal[j][k] = lerp(SKY[i][j][k], SKY[i + 1][j][k], t);
 }
 
-// ---------- RENDU ----------
-function trackPath(x0, x1) {          // un seul Path2D reutilise pour toutes les passes
+// ---------- RENDERING ----------
+function trackPath(x0, x1) {          // a single Path2D reused for every pass
   var i0 = mx(0, x0 / S | 0), i1 = mn(NT - 1, x1 / S | 0), pen = 0, i, P = new P2();
   for (i = i0; i <= i1; i++) {
     var e = hole[i], st = i > 0 && hole[i - 1];
@@ -954,18 +954,18 @@ function chain(ch, w0, hue0) {
   g.addColorStop(1, 'hsl(' + ((hue0 + 250) % 360 | 0) + ',96%,70%)');
   X.fillStyle = g; X.fill(P);
 }
-var NECKA = M.atan2(HDY - .28, HDX - .34);   // angle encolure/corps au repos
+var NECKA = M.atan2(HDY - .28, HDX - .34);   // neck/body angle at rest
 var INK = '#b79ad9', SKIN = '#fdfaff', SKIN2 = '#e3d2f7';
-function part(px, py, ang, sx, sy) {        // repere local en metres, ancre + rotation
+function part(px, py, ang, sx, sy) {        // local frame in metres, anchor + rotation
   X.save(); X.translate(px, py); X.rotate(ang); if (sx) X.scale(sx, sy);
 }
 function fs2(fill, stroke) { X.fillStyle = fill; X.fill(); if (stroke !== 0) { X.strokeStyle = INK; X.lineWidth = .035; X.stroke(); } }
 function joint(x, y, r, c) { X.beginPath(); X.arc(x, y, r, 0, TAU); X.fillStyle = c; X.fill(); }
 
 var LEGL = 1.02;
-// Articulation stylisee plutot qu'IK exacte : elle reste a 62 % de la descente et
-// la saillie est bornee. L'IK exacte la placait a 40 % avec 49 cm de saillie,
-// donc 34 cm derriere le sabot : la patte partait en sauterelle.
+// Stylized joint rather than exact IK: it stays at 62% of the way down and
+// the bulge is bounded. Exact IK put it at 40% with a 49 cm bulge,
+// so 34 cm behind the hoof: the leg turned into a grasshopper leg.
 function leg(hx, hy, fx, fy, side, near) {
   var dx = fx - hx, dy = fy - hy, d = hyp(dx, dy) || 1e-9, ux = dx / d, uy = dy / d;
   var bul = .05 + mn(.22, mx(0, LEGL - d) * .55);
@@ -979,19 +979,19 @@ function leg(hx, hy, fx, fy, side, near) {
   joint(hx, hy, w * .6, c); joint(kx, ky, w * .5, c); joint(bx, by, w * .36, c);
   joint(fx, fy, .082, near ? '#6b4f9c' : '#55407e');
 }
-// Cycle de galop. La phase vient de la distance parcourue, donc la cadence suit
-// la vitesse exactement comme le faisait la rotation des roues.
+// Gallop cycle. The phase comes from the distance travelled, so the cadence follows
+// the speed exactly as the wheel rotation used to.
 var DUTY = .42, STRIDE = .62, LIFT = .42, HX = 0, HY = 0, gAir = 0;
 function hoof(cx, cy, p, fwd) {
   p -= M.floor(p);
   var ox, oy, q;
-  if (p < DUTY) { ox = STRIDE * (.5 - p / DUTY); oy = 0; }     // appui : le sabot recule au sol
+  if (p < DUTY) { ox = STRIDE * (.5 - p / DUTY); oy = 0; }     // stance: the hoof moves back along the ground
   else { q = (p - DUTY) / (1 - DUTY); ox = STRIDE * (q - .5); oy = LIFT * sin(q * PI); }
   var x = cx + ox;
-  // le sabot se pose sur la piste sous lui. Sans ca, en descente, le decalage
-  // horizontal de la foulee le laisse flotter 20 cm au dessus du sol.
+  // the hoof lands on the track below it. Without this, downhill, the stride's
+  // horizontal offset leaves it floating 20 cm above the ground.
   var y = clamp(groundY(x), cy - .62, cy - .04) + oy;
-  if (gAir > .01) {                                            // en vol : anterieurs tendus, posterieurs replies
+  if (gAir > .01) {                                            // in flight: forelegs extended, hind legs folded
     var ca = cos(B.a), sa = sin(B.a), bx = fwd * .34, by = .02;
     x = lerp(x, cx + ca * bx - sa * by, gAir);
     y = lerp(y, cy + sa * bx + ca * by, gAir);
@@ -1003,11 +1003,11 @@ function drawUni() {
   if (mode === 2) for (i = 0; i < 6; i++) J.push([rag[i].x, rag[i].y]);
   else for (i = 0; i < 6; i++) J.push(loc(LOC[i][0], LOC[i][1]));
   var hd = J[0], wi = J[1], ch = J[2], ru = J[3], fs = J[4], rs = J[5];
-  // angles reconstruits : marche pour le corps rigide comme pour le ragdoll
+  // reconstructed angles: works for the rigid body as well as the ragdoll
   var ta = mode === 2 ? M.atan2(ch[1] - ru[1], ch[0] - ru[0]) : B.a;
   var nk = hd;
   var ha = mode === 2 ? M.atan2(hd[1] - wi[1], hd[0] - wi[0]) - NECKA : B.a - tuckV * .42;
-  if (mode !== 2 && tuckV > .01) {                     // tout schuss : la tete plonge
+  if (mode !== 2 && tuckV > .01) {                     // tuck: the head dives
     hd[0] += cos(ta) * tuckV * .17 + sin(ta) * tuckV * .26;
     hd[1] += sin(ta) * tuckV * .17 - cos(ta) * tuckV * .26;
   }
@@ -1022,8 +1022,8 @@ function drawUni() {
 
   gAir = lerp(gAir, mode === 1 && air ? 1 : 0, .14);
   if (mode === 2) gAir = 0;
-  var gp = B.x / 1.9;                                  // une foulee tous les 1.9 m
-  // tangage : le corps monte deux fois par foulee, les sabots eux restent au sol
+  var gp = B.x / 1.9;                                  // one stride every 1.9 m
+  // pitch: the body rises twice per stride, the hooves themselves stay on the ground
   var bob = mode === 1 && !air ? sin(gp * TAU * 2) * .035 : 0;
   hd[1] += bob; wi[1] += bob; ch[1] += bob; ru[1] += bob;
   var sh = [ru[0] + cos(ta) * .95 - sin(ta) * -.15, ru[1] + sin(ta) * .95 + cos(ta) * -.15];
@@ -1031,7 +1031,7 @@ function drawUni() {
   if (lost === 0) nk = [wi[0] + cos(ta + NECKA) * .3, wi[1] + sin(ta + NECKA) * .3];
   if (lost === 4) fs = [sh[0] + sin(ta) * .44, sh[1] - cos(ta) * .44];
   if (lost === 5) rs = [hi[0] + sin(ta) * .44, hi[1] - cos(ta) * .44];
-  // galop transverse : posterieur, posterieur, anterieur, anterieur, puis suspension
+  // transverse gallop: hind, hind, fore, fore, then suspension
   function hf(c, ph, fwd) {
     if (mode === 2) { HX = c[0]; HY = c[1] - .28; } else hoof(c[0], c[1], gp + ph, fwd);
   }
@@ -1039,10 +1039,10 @@ function drawUni() {
   hf(fs, .58, 1); leg(sh[0] + .1, sh[1], HX + .13, HY, 1, 0);
   hf(rs, .13, -1); leg(hi[0] + .1, hi[1], HX + .13, HY, 1, 0);
 
-  // criniere : dessinee avant l'encolure, elle passe derriere le cou ET la tete
+  // mane: drawn before the neck, it passes behind the neck AND the head
   for (i9 = 0; i9 < 5; i9++) chain(MANE[i9], MANE[i9].w, (MANE[i9].h + AT * 42) % 360);
 
-  // encolure : quadrilatere fuselant qui relie toujours garrot et tete
+  // neck: tapering quad that always links withers and head
   var nx = nk[0] - wi[0], ny = nk[1] - wi[1], nl = hyp(nx, ny) || 1e-9;
   var ux = nx / nl, uy = ny / nl, pxx = -uy, pyy = ux;
   X.beginPath();
@@ -1056,7 +1056,7 @@ function drawUni() {
                   wi[0] - pxx * .26, wi[1] - pyy * .26);
   X.closePath(); fs2(SKIN);
 
-  // torse : ancre a la croupe, oriente croupe -> poitrail, avec ecrasement a l'impact
+  // torso: anchored at the rump, oriented rump -> chest, with squash on impact
   part(ru[0], ru[1], ta, 1 + sq * .1, 1 - sq * .16);
   var bg = X.createLinearGradient(0, .38, 0, -.4);
   bg.addColorStop(0, '#fff'); bg.addColorStop(.5, SKIN); bg.addColorStop(1, SKIN2);
@@ -1070,29 +1070,29 @@ function drawUni() {
   X.bezierCurveTo(-.12, -.20, -.19, -.10, -.16, .02);
   X.closePath(); fs2(bg);
   X.beginPath(); X.ellipse(.30, -.08, .34, .18, .1, 0, TAU);
-  X.fillStyle = 'rgba(190,160,230,.22)'; X.fill();    // ombre du flanc
+  X.fillStyle = 'rgba(190,160,230,.22)'; X.fill();    // flank shadow
   X.restore();
 
-  // tete
+  // head
   part(hd[0], hd[1], ha);
-  X.beginPath();                                       // oreille
+  X.beginPath();                                       // ear
   X.moveTo(-.13, .22); X.bezierCurveTo(-.22, .40, -.13, .46, -.04, .34);
   X.bezierCurveTo(.01, .27, -.04, .21, -.13, .22);
   fs2(SKIN2);
-  X.beginPath();                                       // crane + chanfrein + museau
+  X.beginPath();                                       // skull + nose bridge + muzzle
   X.moveTo(-.20, .08);
   X.bezierCurveTo(-.17, .28, .04, .35, .19, .27);
   X.bezierCurveTo(.33, .19, .43, .07, .41, -.06);
   X.bezierCurveTo(.39, -.19, .26, -.25, .11, -.23);
   X.bezierCurveTo(-.05, -.21, -.23, -.10, -.20, .08);
   X.closePath(); fs2(SKIN);
-  joint(.31, -.09, .036, '#c9aae8');                   // naseau
-  joint(.15, -.03, .085, 'rgba(255,150,190,.42)');     // joue rose
+  joint(.31, -.09, .036, '#c9aae8');                   // nostril
+  joint(.15, -.03, .085, 'rgba(255,150,190,.42)');     // pink cheek
   var eo = mode === 2 ? .105 : air ? .085 : .062;
-  var bl = (AT % 4.1) < .09 ? .18 : 1;                 // clignement
+  var bl = (AT % 4.1) < .09 ? .18 : 1;                 // blink
   X.beginPath(); X.ellipse(.03, .10, eo, eo * 1.15 * bl, 0, 0, TAU); X.fillStyle = '#3b2159'; X.fill();
   if (bl > .5) joint(.055, .135, eo * .38, '#fff');
-  // corne torsadee
+  // twisted horn
   var hgr = X.createLinearGradient(.14, .24, .34, .74);
   hgr.addColorStop(0, '#ffe9a0'); hgr.addColorStop(1, '#ffab3d');
   X.beginPath(); X.moveTo(.06, .26); X.lineTo(.24, .21); X.lineTo(.30, .72); X.closePath();
@@ -1109,7 +1109,7 @@ function drawUni() {
 
   hf(fs, .46, 1); leg(sh[0] - .07, sh[1], HX - .11, HY, 1, 1);
   hf(rs, 0, -1); leg(hi[0] - .07, hi[1], HX - .11, HY, 1, 1);
-  if (lost > 0) {                                      // le bout de patte arrache
+  if (lost > 0) {                                      // the torn-off piece of leg
     var lp = rag[lost], vx2 = (lp.x - lp.px) * 7, vy2 = (lp.y - lp.py) * 7;
     var vl = hyp(vx2, vy2) || 1e-9;
     X.strokeStyle = SKIN; X.lineWidth = .13; X.lineCap = 'round';
@@ -1140,7 +1140,7 @@ function drawStars(x0, x1) {
     p = stars[i];
     if (p.x > x1) break;
     if (p.x < x0 || p.g) continue;
-    if (p.t === 1) {                                   // BOOSTER : chevrons qui filent
+    if (p.t === 1) {                                   // BOOSTER: chevrons streaming past
       pu = .75 + sin(AT * 7 + i) * .25;
       X.fillStyle = 'hsla(190,100%,70%,' + (.22 * pu).toFixed(2) + ')';
       X.beginPath(); X.arc(p.x, p.y, .75, 0, TAU); X.fill();
@@ -1152,7 +1152,7 @@ function drawStars(x0, x1) {
         Pb.moveTo(ox - .16, .34); Pb.lineTo(ox + .13, 0); Pb.lineTo(ox - .16, -.34);
       }
       X.stroke(Pb); X.restore();
-    } else if (p.t === 2) {                            // TRAMPOLINE : toile tendue entre deux plots
+    } else if (p.t === 2) {                            // TRAMPOLINE: canvas stretched between two posts
       pu = p.c ? 0 : .06 + sin(AT * 3 + i) * .05;
       X.strokeStyle = 'rgba(150,255,215,.9)'; X.lineWidth = .1; X.lineCap = 'round';
       X.beginPath(); X.moveTo(p.x - .62, p.y + .1); X.quadraticCurveTo(p.x, p.y - .22 + pu * 3, p.x + .62, p.y + .1); X.stroke();
@@ -1163,7 +1163,7 @@ function drawStars(x0, x1) {
       X.moveTo(p.x - .62, p.y + .1); X.lineTo(p.x - .5, p.y - .34);
       X.moveTo(p.x + .62, p.y + .1); X.lineTo(p.x + .5, p.y - .34);
       X.stroke();
-    } else {                                           // PIECE d'or qui tourne
+    } else {                                           // spinning gold COIN
       hu = 45; pu = abs(cos(AT * 3.4 + i * .7));
       X.fillStyle = 'hsla(45,100%,66%,.26)';
       X.beginPath(); X.arc(p.x, p.y, .42, 0, TAU); X.fill();
@@ -1180,25 +1180,25 @@ function drawStars(x0, x1) {
 function drawFx() {
   var i, p;
   X.save(); X.globalCompositeOperation = 'lighter';
-  for (i = 0; i < rings.length; i++) {                 // ondes de choc
+  for (i = 0; i < rings.length; i++) {                 // shockwaves
     p = rings[i];
     X.globalAlpha = clamp(p.l / p.lm, 0, 1) * .8;
     X.strokeStyle = 'rgba(' + p.c + ',1)'; X.lineWidth = p.w * (p.l / p.lm);
     X.beginPath(); X.ellipse(p.x, p.y, p.r, p.r * .42, 0, 0, TAU); X.stroke();
   }
-  if (swoosh > 0 && mode === 1) {                      // trainee du coup de reins
+  if (swoosh > 0 && mode === 1) {                      // trail of the hip kick
     X.globalAlpha = swoosh * .5;
     X.strokeStyle = 'rgba(190,235,255,1)'; X.lineWidth = .1;
     var a0 = B.a + (swD > 0 ? .3 : -2.3);
     X.beginPath(); X.arc(B.x, B.y, 1.05, a0, a0 + swD * 2, swD < 0); X.stroke();
   }
-  if (air && airT > .35 && mode === 1) {                // jauge de temps de vol
+  if (air && airT > .35 && mode === 1) {                // airtime gauge
     X.globalAlpha = clamp((airT - .35) * 3, 0, 1) * .75;
     X.strokeStyle = airT > 1.2 ? 'rgba(255,220,110,1)' : 'rgba(180,255,220,1)';
     X.lineWidth = .09;
     X.beginPath(); X.arc(B.x, B.y + .3, 1.35, PI * .25, PI * .25 + mn(1, airT / 1.8) * PI * .5); X.stroke();
   }
-  if (glide > .15 && mode === 1) {                     // coussin d'air : on plane
+  if (glide > .15 && mode === 1) {                     // air cushion: you glide
     X.globalAlpha = glide * .55;
     X.strokeStyle = 'rgba(200,245,255,1)'; X.lineWidth = .07;
     for (var q = 0; q < 3; q++) {
@@ -1206,17 +1206,17 @@ function drawFx() {
       X.beginPath(); X.moveTo(B.x - ww, yy); X.quadraticCurveTo(B.x, yy - .3 + sin(AT * 9 + q) * .05, B.x + ww, yy); X.stroke();
     }
   }
-  if (pend && mode === 1) {                            // la figure se verrouille
+  if (pend && mode === 1) {                            // the trick is locking in
     X.globalAlpha = .5;
     X.strokeStyle = 'rgba(255,255,255,1)'; X.lineWidth = .06;
     X.beginPath(); X.arc(B.x, B.y + .2, 1 + pendT * 2.6, 0, TAU); X.stroke();
   }
-  if (boostT > 0 && mode === 1) {                      // aura de boost
+  if (boostT > 0 && mode === 1) {                      // boost aura
     X.globalAlpha = clamp(boostT, 0, 1) * .55;
     X.fillStyle = '#7fe8ff';
     X.beginPath(); X.arc(B.x, B.y + .2, 1.25 + sin(AT * 22) * .09, 0, TAU); X.fill();
   }
-  if (!air && mode === 1) {                            // halo au point de contact
+  if (!air && mode === 1) {                            // halo at the contact point
     var sp2 = hyp(B.vx, B.vy);
     if (sp2 > 4) {
       X.globalAlpha = clamp(sp2 / 30, 0, .5);
@@ -1235,7 +1235,7 @@ function drawWorldText() {
   }
   X.globalAlpha = 1;
 }
-function drawSplat() {                                  // taches seches sur la piste
+function drawSplat() {                                  // dried stains on the track
   if (!splat.length) return;
   var P = new P2(), i;
   for (i = 0; i < splat.length; i++) {
@@ -1245,7 +1245,7 @@ function drawSplat() {                                  // taches seches sur la 
   }
   X.fillStyle = 'rgba(126,8,26,.62)'; X.fill(P);
 }
-function drawBlood() {                                  // gouttes en vol
+function drawBlood() {                                  // droplets in flight
   if (!blood.length) return;
   var P = new P2(), i;
   for (i = 0; i < blood.length; i++) {
@@ -1270,7 +1270,7 @@ function txt(s, x, y, size, col, al, we) {
   X.font = (we || 700) + ' ' + (size * DPR | 0) + 'px "Trebuchet MS",Verdana,sans-serif';
   X.textAlign = al || 'left'; X.fillStyle = col; X.fillText(s, x, y);
 }
-function drawToast() {                                 // un seul encart a la fois, en haut
+function drawToast() {                                 // one panel at a time, at the top
   if (!toastQ.length) return;
   var sl = clamp(toastT * 5, 0, 1), a = mn(sl, clamp((TOASTD - toastT) * 3, 0, 1));
   var w = mn(W * .66, 340 * DPR), h = 42 * DPR, x = (W - w) / 2, y = 74 * DPR - (1 - sl) * 16 * DPR;
@@ -1292,7 +1292,7 @@ function drawHUD() {
     txt(score | 0, W - pad, pad + 30 * DPR, 30, ink, 'right');
     var spd = hyp(B.vx, B.vy) * 3.6;
     txt((spd | 0) + ' km/h', W - pad, pad + 50 * DPR, 12, ink, 'right', 600);
-    // etat du saut : la seule info qui n'est affichee nulle part ailleurs
+    // jump state: the only info not displayed anywhere else
     var by = pad + 10 * DPR, cs = 11 * DPR;
     X.fillStyle = jmp ? '#8fe9ff' : 'rgba(255,255,255,.22)';
     X.beginPath();
@@ -1348,27 +1348,27 @@ function drawHUD() {
 }
 
 // ---------- WAVEDASH ----------
-// Wavedash injecte le global `Wavedash` avant le code du jeu. Ailleurs il
-// n'existe pas : chaque appel est garde, rien n'est charge depuis le reseau,
-// et le jeu se comporte a l'identique sur js13kgames.com.
-// Un garde par appel : une methode absente de Wavedash ne doit pas emporter
-// les autres.
-// Les identifiants de trophees sont derives des titres affiches (ACHT), donc
-// renommer un titre renomme son trophee : le remettre a jour au portail.
+// Wavedash injects the `Wavedash` global before the game code. Elsewhere it
+// does not exist: every call is guarded, nothing is loaded from the network,
+// and the game behaves identically on js13kgames.com.
+// One guard per call: a method missing from Wavedash must not take down
+// the others.
+// Achievement ids are derived from the displayed titles (ACHT), so
+// renaming a title renames its achievement: update it again on the portal.
 var WD = self.Wavedash, wdOK = 0, wdQ = [];
 function wdCall(method, ...args) { try { if (WD && WD[method]) return WD[method](...args); } catch (e) { } }
-function wdFlush() {                                   // getAchievement evite un envoi reseau inutile
+function wdFlush() {                                   // getAchievement avoids a needless network send
   while (wdOK && wdQ.length) {
     var i = wdQ[0];
     if (wdCall('getAchievement', i) === true || wdCall('setAchievement', i, true) === true) wdQ.shift();
-    else break;                                        // refus : on retentera au prochain trophee
+    else break;                                        // refused: we retry on the next achievement
   }
 }
-function wdAward(i) {                                  // gagne avant la reponse des stats : mis en attente
+function wdAward(i) {                                  // earned before the stats reply: queued
   wdQ.push('RB_' + ACHT[i].toUpperCase().replace(/[^A-Z0-9]+/g, '_'));
   wdFlush();
 }
-function wdScore(n, v) {                               // le classement est cree au premier envoi
+function wdScore(n, v) {                               // the leaderboard is created on the first send
   var p = wdCall('getOrCreateLeaderboard', n, 1, 0);   // DESC, NUMERIC
   if (p && p.then) p.then(function (r) {
     if (r && r.success && r.data && r.data.id) {
@@ -1378,7 +1378,7 @@ function wdScore(n, v) {                               // le classement est cree
   }, function () { });
 }
 
-// ---------- BOUCLE ----------
+// ---------- LOOP ----------
 function render() {
   palette(dist / 1700);
   drawSky(); drawMountains(); if (!LOW) drawClouds();
@@ -1415,9 +1415,9 @@ function render() {
 }
 var last = 0;
 function loop(t) {
-  var dt = mn(.033, (t - last) / 1000) || 0; last = t;  // 11 sous-pas max, DT reste <= 3 ms
+  var dt = mn(.033, (t - last) / 1000) || 0; last = t;  // 11 substeps max, DT stays <= 3 ms
   if (dt > .002) fps = lerp(fps, 1 / dt, .04);
-  LOW = fps < 46;                                      // machine a la peine : on allege
+  LOW = fps < 46;                                      // machine struggling: lighten the load
   AT += dt;
   tScale = lerp(tScale, trickT > 0 ? .45 : 1, mn(1, dt * 9));
   update(dt * slowmo * tScale);
@@ -1425,7 +1425,7 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 wdCall('init');
-var wdS = wdCall('requestStats');                      // sans lui setAchievement ne fait rien, en silence
+var wdS = wdCall('requestStats');                      // without it setAchievement silently does nothing
 if (wdS && wdS.then) wdS.then(function (r) { wdOK = r && r.success && r.data === true; wdFlush(); }, function () { });
 spawn(20260813);
 requestAnimationFrame(loop);

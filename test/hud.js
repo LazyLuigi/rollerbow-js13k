@@ -1,6 +1,6 @@
 'use strict';
-// Verifie que les textes centraux ne se superposent jamais et ne sortent pas
-// du cadre, sur plusieurs formats d'ecran.
+// Checks that the center texts never overlap and never go off-screen,
+// on several screen formats.
 const { load } = require('./harness');
 const file = process.argv[2] || 'src/index.html';
 const KEY = /BACKFLIP|FRONTFLIP|PERFECT|AIRTIME|BOING|BOOST|TRICK LOST|^x\d/;
@@ -42,11 +42,11 @@ for (let i = 0; i < 7200; i++) {
   if (G.mode === 2 && G.deadT > 1.2) { G.spawn(4242); G.mode = 1; }
 }
 ys.sort((a, b) => a - b);
-console.log('frames avec plusieurs textes :', seen);
-console.log('maximum simultane            :', maxSimul);
-console.log('ecart vertical minimal       :', minGap < 1e9 ? minGap.toFixed(0) + ' px' : '-');
-console.log('frames en superposition      :', overl);
-console.log('position verticale           :', ys[0].toFixed(0) + ' a ' + ys[ys.length - 1].toFixed(0) + ' px sur ' + G.H);
+console.log('frames with several texts    :', seen);
+console.log('maximum simultaneous         :', maxSimul);
+console.log('minimum vertical gap         :', minGap < 1e9 ? minGap.toFixed(0) + ' px' : '-');
+console.log('frames with overlap          :', overl);
+console.log('vertical position            :', ys[0].toFixed(0) + ' to ' + ys[ys.length - 1].toFixed(0) + ' px out of ' + G.H);
 const ok = overl === 0 && ys[0] > 0 && ys[ys.length - 1] < G.H;
-console.log(ok ? 'OK : aucune superposition, rien hors cadre.' : 'ECHEC');
+console.log(ok ? 'OK : no overlap, nothing off-screen.' : 'FAIL');
 process.exit(ok ? 0 : 1);

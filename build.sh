@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Chaine de build js13kGames + Wavedash : extraction -> terser -> roadroller -> zip -> advzip.
+# js13kGames + Wavedash build chain: extraction -> terser -> roadroller -> zip -> advzip.
 #
-#   ./build.sh                      # construit src/index.html
-#   ./build.sh --best 6             # 6 tirages roadroller, garde le plus petit
-#   ./build.sh src/v1-skates.html   # variante patins a roulettes
+#   ./build.sh                      # builds src/index.html
+#   ./build.sh --best 6             # 6 roadroller draws, keeps the smallest
 #
-# Sorties :
-#   rollerbow.zip            archive du concours, index.html a sa racine
-#   dist/js13k/index.html    page compressee, celle qui est dans le zip
-#   dist/wavedash/index.html page non minifiee, cible du challenge Wavedash
+# Outputs:
+#   rollerbow.zip            contest archive, index.html at its root
+#   dist/js13k/index.html    compressed page, the one that is in the zip
+#   dist/wavedash/index.html non-minified page, target of the Wavedash challenge
 set -euo pipefail
 
 SRC=""; BEST=1
@@ -21,51 +20,51 @@ done
 SRC="${SRC:-src/index.html}"
 LIMIT=13312                       # 13 * 1024
 ZIP=rollerbow.zip
-[ -f "$SRC" ] || { echo "Source introuvable : $SRC"; exit 1; }
+[ -f "$SRC" ] || { echo "Source not found: $SRC"; exit 1; }
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 mkdir -p dist/js13k dist/wavedash
 
-# --- outils ---
+# --- tools ---
 if [ ! -x ./node_modules/.bin/terser ] || [ ! -x ./node_modules/.bin/roadroller ]; then
-  echo "Installation de terser et roadroller..."
+  echo "Installing terser and roadroller..."
   npm install --silent
 fi
 TERSER=./node_modules/.bin/terser
 ROADROLLER=./node_modules/.bin/roadroller
 
-# --- 1. extraction du <script> et du <style> ---
+# --- 1. extraction of the <script> and the <style> ---
 python3 - "$SRC" "$WORK" <<'PY'
 import re, sys
 src, work = sys.argv[1], sys.argv[2]
 html = open(src, encoding='utf-8').read()
 m = re.search(r'<script>(.*)</script>', html, re.S)
 if not m:
-    sys.exit("Aucun bloc <script> trouve dans " + src)
+    sys.exit("No <script> block found in " + src)
 open(work + '/game.js', 'w', encoding='utf-8').write(m.group(1))
 sm = re.search(r'<style>(.*?)</style>', html, re.S)
 open(work + '/style.css', 'w', encoding='utf-8').write(sm.group(1) if sm else '')
 PY
 
-# --- 2. verification de syntaxe puis minification ---
-# Pas de booleans_as_integers : il reecrit true en 1 et le SDK Wavedash
-# valide ses types, donc tous les appels seraient rejetes en silence.
-node --check "$WORK/game.js" && echo "Syntaxe JS : OK"
+# --- 2. syntax check then minification ---
+# No booleans_as_integers: it rewrites true as 1 and the Wavedash SDK
+# validates its types, so every call would be rejected silently.
+node --check "$WORK/game.js" && echo "JS syntax  : OK"
 "$TERSER" "$WORK/game.js" -c passes=3,unsafe=true -m toplevel=true -o "$WORK/game.min.js"
-echo "terser     : $(wc -c < "$WORK/game.min.js") octets"
+echo "terser     : $(wc -c < "$WORK/game.min.js") bytes"
 
-# --- 3. roadroller : sa recherche de parametres est aleatoire, donc on tire
-#        plusieurs fois et on garde le meilleur echantillon. ---
+# --- 3. roadroller: its parameter search is random, so we draw
+#        several times and keep the best sample. ---
 BESTN=0
 for i in $(seq 1 "$BEST"); do
   "$ROADROLLER" "$WORK/game.min.js" -o "$WORK/cand.js" 2>/dev/null
   N=$(wc -c < "$WORK/cand.js")
   if [ "$BESTN" -eq 0 ] || [ "$N" -lt "$BESTN" ]; then BESTN=$N; cp "$WORK/cand.js" "$WORK/game.rr.js"; fi
-  [ "$BEST" -gt 1 ] && echo "  tirage $i : $N octets"
+  [ "$BEST" -gt 1 ] && echo "  draw $i : $N bytes"
 done
-echo "roadroller : $BESTN octets"
+echo "roadroller : $BESTN bytes"
 
-# --- 4. HTML minimal reconstruit autour du JS compresse ---
+# --- 4. minimal HTML rebuilt around the compressed JS ---
 python3 - "$WORK" <<'PY'
 import sys
 work = sys.argv[1]
@@ -77,28 +76,28 @@ open(work + '/index.html', 'w', encoding='utf-8').write(
     + style + '<canvas id=c></canvas><script>' + js + '</script>')
 PY
 
-# --- 5. zip -9 puis recompression zopfli : contenu identique, conteneur plus petit ---
+# --- 5. zip -9 then zopfli recompression: identical content, smaller container ---
 ( cd "$WORK" && zip -9 -q out.zip index.html )
 if command -v advzip >/dev/null 2>&1; then
   Z9=$(wc -c < "$WORK/out.zip")
   advzip -z -4 -q "$WORK/out.zip"
-  echo "zip -9     : $Z9 octets  ->  advzip : $(wc -c < "$WORK/out.zip") octets"
+  echo "zip -9     : $Z9 bytes  ->  advzip : $(wc -c < "$WORK/out.zip") bytes"
 else
-  echo "advzip absent : archive non recompressee (brew install advancecomp)"
+  echo "advzip missing: archive not recompressed (brew install advancecomp)"
 fi
 unzip -t -qq "$WORK/out.zip"
 
 Z=$(wc -c < "$WORK/out.zip")
 echo "----------------------------------------"
-echo "ZIP : $Z / $LIMIT octets"
-if [ "$Z" -gt "$LIMIT" ]; then echo "DEPASSEMENT de $((Z - LIMIT)) octets."; exit 1; fi
+echo "ZIP : $Z / $LIMIT bytes"
+if [ "$Z" -gt "$LIMIT" ]; then echo "OVER BUDGET by $((Z - LIMIT)) bytes."; exit 1; fi
 
-# Les livrables ne sont remplaces qu'une fois l'archive verifiee et dans le budget.
+# The deliverables are only replaced once the archive is verified and within budget.
 cp "$WORK/index.html" dist/js13k/index.html
 cp "$WORK/out.zip"    "$ZIP"
 cp "$SRC"             dist/wavedash/index.html
 
-echo "DANS LE BUDGET. Marge : $((LIMIT - Z)) octets."
-echo "  $ZIP                     a soumettre"
-echo "  dist/js13k/index.html    la page du zip"
-echo "  dist/wavedash/index.html cible Wavedash, non compressee"
+echo "WITHIN BUDGET. Margin: $((LIMIT - Z)) bytes."
+echo "  $ZIP                     to submit"
+echo "  dist/js13k/index.html    the page in the zip"
+echo "  dist/wavedash/index.html Wavedash target, not compressed"

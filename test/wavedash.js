@@ -1,14 +1,14 @@
 'use strict';
-// Integration Wavedash : trophees et classements, sur la SORTIE TERSER.
+// Wavedash integration: achievements and leaderboards, on the TERSER OUTPUT.
 //
-// Pourquoi la sortie terser et pas la source : terser peut reecrire un litteral
-// booleen en entier, et le SDK Wavedash valide ses types. L'appel est alors
-// rejete, la garde defensive avale l'exception, et rien ne part -- sans un mot
-// dans la console. Ce bug n'existe que dans le build. Le stub ci-dessous
-// reproduit donc la validation du vrai SDK et COMPTE les violations, au lieu
-// de tout accepter : une doublure permissive ne teste rien.
+// Why the terser output and not the source: terser can rewrite a boolean
+// literal into an integer, and the Wavedash SDK validates its types. The call
+// is then rejected, the defensive guard swallows the exception, and nothing is
+// sent, without a word in the console. This bug only exists in the build. So
+// the stub below reproduces the real SDK validation and COUNTS the violations,
+// instead of accepting everything: a permissive stub tests nothing.
 //
-//   node test/wavedash.js            # source + sortie terser
+//   node test/wavedash.js            # source + terser output
 //   node test/wavedash.js --src-only
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -17,9 +17,9 @@ const path = require('path');
 const { load } = require('./harness');
 
 let fail = 0;
-const check = (ok, msg) => { console.log((ok ? '  OK   ' : '  ECHEC') + '  ' + msg); if (!ok) fail = 1; };
+const check = (ok, msg) => { console.log((ok ? '  OK   ' : '  FAIL ') + '  ' + msg); if (!ok) fail = 1; };
 
-// --- la doublure : memes verifications de type que le SDK, et elle compte tout ---
+// --- the stub: same type checks as the SDK, and it counts everything ---
 function makeSDK(opt) {
   opt = opt || {};
   const log = { init: 0, stats: 0, set: [], get: 0, boards: [], scores: [], typeErr: [] };
@@ -39,7 +39,7 @@ function makeSDK(opt) {
     getAchievement(id) { vStr(id, 'identifier'); log.get++; return unlocked.has(id); },
     setAchievement(id, storeNow) {
       vStr(id, 'identifier'); vBool(storeNow, 'storeNow');
-      if (known.size && !known.has(id)) { log.set.push('!' + id); return false; }  // absent du portail
+      if (known.size && !known.has(id)) { log.set.push('!' + id); return false; }  // missing from the portal
       log.set.push(id); unlocked.add(id); return true;
     },
     getOrCreateLeaderboard(name, sort, disp) {
@@ -47,7 +47,7 @@ function makeSDK(opt) {
       log.boards.push(name);
       if (opt.boardReject) return Promise.reject(new Error('boom'));
       if (opt.boardFail) return Promise.resolve({ success: false });
-      // forme lue dans les types generes du serveur : id, jamais _id
+      // shape read from the server generated types: id, never _id
       return Promise.resolve({ success: true, data: { id: 'lb_' + name, name: name, totalEntries: 0, created: true } });
     },
     uploadLeaderboardScore(id, score, keepBest) {
@@ -63,13 +63,13 @@ function makeSDK(opt) {
 
 const flush = () => new Promise(r => setImmediate(() => setImmediate(() => setImmediate(r))));
 
-// Joue jusqu'a decrocher un trophee, puis tue la licorne pour declencher les scores.
+// Plays until an achievement is earned, then kills the unicorn to trigger the scores.
 async function run(file, opt) {
   const { sdk, log } = makeSDK(opt);
   const G = load(file, opt.noSDK ? {} : { wavedash: sdk });
   await flush();
   G.spawn(4242); G.mode = 1;
-  G.st5 = [20, 50, 140, 3000, 200];       // tours, combo, km/h, distance, pieces
+  G.st5 = [20, 50, 140, 3000, 200];       // flips, combo, km/h, distance, coins
   G.chkAch();
   G.dist = 1234.7; G.score = 8888; G.die();
   await flush();
@@ -82,20 +82,20 @@ const IDS = ['RB_FIRST_FLIP', 'RB_5_FLIPS', 'RB_12_FLIPS', 'RB_COMBO_X25', 'RB_C
 async function suite(file, label) {
   console.log('\n=== ' + label + ' (' + file + ') ===');
 
-  console.log('1. plateforme presente, tout repond');
+  console.log('1. platform present, everything responds');
   {
     const { log } = await run(file, {});
-    check(log.init === 1, 'init() appele une fois');
-    check(log.stats === 1, 'requestStats() appele : sans lui aucun trophee ne part');
-    check(log.typeErr.length === 0, 'aucune violation de type' + (log.typeErr.length ? ' : ' + log.typeErr.join(', ') : ''));
-    check(log.set.length === 12, '12 trophees envoyes (' + log.set.length + ')');
-    check(JSON.stringify(log.set) === JSON.stringify(IDS), 'identifiants attendus : ' + log.set.slice(0, 3).join(', ') + '...');
-    check(log.boards.length === 2 && log.scores.length === 2, '2 classements crees, 2 scores envoyes');
-    check(log.scores.some(s => s[0] === 'lb_distance-v1' && s[1] === 1234), 'distance lue depuis data.id, arrondie : ' + JSON.stringify(log.scores));
-    check(log.scores.some(s => s[0] === 'lb_score-v1' && s[1] === 8888), 'score lu depuis data.id');
+    check(log.init === 1, 'init() called once');
+    check(log.stats === 1, 'requestStats() called: without it no achievement is sent');
+    check(log.typeErr.length === 0, 'no type violation' + (log.typeErr.length ? ': ' + log.typeErr.join(', ') : ''));
+    check(log.set.length === 12, '12 achievements sent (' + log.set.length + ')');
+    check(JSON.stringify(log.set) === JSON.stringify(IDS), 'expected identifiers: ' + log.set.slice(0, 3).join(', ') + '...');
+    check(log.boards.length === 2 && log.scores.length === 2, '2 leaderboards created, 2 scores sent');
+    check(log.scores.some(s => s[0] === 'lb_distance-v1' && s[1] === 1234), 'distance read from data.id, rounded: ' + JSON.stringify(log.scores));
+    check(log.scores.some(s => s[0] === 'lb_score-v1' && s[1] === 8888), 'score read from data.id');
   }
 
-  console.log('2. trophee gagne avant la reponse des stats');
+  console.log('2. achievement earned before the stats response');
   {
     const { sdk, log } = makeSDK({});
     let release;
@@ -103,25 +103,25 @@ async function suite(file, label) {
     const G = load(file, { wavedash: sdk });
     G.spawn(4242); G.mode = 1;
     G.st5 = [20, 50, 140, 3000, 200]; G.chkAch();
-    check(log.set.length === 0, 'rien n\'est envoye tant que les stats ne repondent pas');
+    check(log.set.length === 0, 'nothing is sent while the stats have not responded');
     release(); await flush();
-    check(log.set.length === 12, 'les 12 trophees en attente partent a la reponse (' + log.set.length + ')');
+    check(log.set.length === 12, 'the 12 pending achievements are sent on the response (' + log.set.length + ')');
   }
 
-  console.log('3. repetitions : un trophee deja debloque ne repart pas');
+  console.log('3. repeats: an already unlocked achievement is not sent again');
   {
     const { sdk, log } = makeSDK({});
     const G = load(file, { wavedash: sdk });
     await flush();
     G.spawn(4242); G.mode = 1;
     G.st5 = [20, 50, 140, 3000, 200]; G.chkAch();
-    G.spawn(4242); G.mode = 1;                       // nouvelle course : les succes locaux repartent a zero
+    G.spawn(4242); G.mode = 1;                       // new run: the local achievements reset to zero
     G.st5 = [20, 50, 140, 3000, 200]; G.chkAch();
-    check(log.set.length === 12, 'toujours 12 envois apres deux courses identiques (' + log.set.length + ')');
-    check(log.get >= 12, 'getAchievement filtre les doublons (' + log.get + ' lectures)');
+    check(log.set.length === 12, 'still 12 sends after two identical runs (' + log.set.length + ')');
+    check(log.get >= 12, 'getAchievement filters duplicates (' + log.get + ' reads)');
   }
 
-  console.log('4. score nul et distance nulle');
+  console.log('4. zero score and zero distance');
   {
     const { sdk, log } = makeSDK({});
     const G = load(file, { wavedash: sdk });
@@ -129,51 +129,51 @@ async function suite(file, label) {
     G.spawn(4242); G.mode = 1;
     G.best = -1; G.bestD = -1; G.dist = 0; G.score = 0; G.die();
     await flush();
-    check(log.scores.length === 2 && log.scores.every(s => s[1] === 0), 'un zero est un score valide, il est envoye');
+    check(log.scores.length === 2 && log.scores.every(s => s[1] === 0), 'a zero is a valid score, it is sent');
   }
 
-  console.log('5. echecs cotes plateforme');
-  for (const [name, opt] of [['stats rejetees', { statsReject: 1 }], ['stats en echec', { statsFail: 1 }],
-                             ['creation de classement rejetee', { boardReject: 1 }], ['classement en echec', { boardFail: 1 }],
-                             ['upload rejete', { uploadReject: 1 }], ['methodes absentes', { missing: ['setAchievement', 'uploadLeaderboardScore', 'getAchievement'] }],
-                             ['identifiants inconnus du portail', { known: ['RB_FIRST_FLIP'] }]]) {
+  console.log('5. platform side failures');
+  for (const [name, opt] of [['stats rejected', { statsReject: 1 }], ['stats failed', { statsFail: 1 }],
+                             ['leaderboard creation rejected', { boardReject: 1 }], ['leaderboard failed', { boardFail: 1 }],
+                             ['upload rejected', { uploadReject: 1 }], ['missing methods', { missing: ['setAchievement', 'uploadLeaderboardScore', 'getAchievement'] }],
+                             ['identifiers unknown to the portal', { known: ['RB_FIRST_FLIP'] }]]) {
     let err = null;
     try { const { G } = await run(file, opt); G.play(30, null, 4242); } catch (e) { err = e; }
-    check(!err, name + ' : le jeu continue sans exception' + (err ? ' -- ' + err.message : ''));
+    check(!err, name + ': the game continues without exception' + (err ? ' -- ' + err.message : ''));
   }
 
-  console.log('6. hors plateforme (js13kgames.com) : aucun global Wavedash');
+  console.log('6. off platform (js13kgames.com): no Wavedash global');
   {
     let err = null;
-    try { const { G, log } = await run(file, { noSDK: 1 }); G.play(60, null, 4242); check(log.init === 0, 'aucun appel emis'); }
-    catch (e) { err = e; check(false, 'exception : ' + e.message); }
-    check(!err, 'le jeu tourne identiquement sans la plateforme');
+    try { const { G, log } = await run(file, { noSDK: 1 }); G.play(60, null, 4242); check(log.init === 0, 'no call issued'); }
+    catch (e) { err = e; check(false, 'exception: ' + e.message); }
+    check(!err, 'the game runs identically without the platform');
   }
 }
 
-// Le SDK ignore en silence tout identifiant absent du Developer Portal. Le JSON
-// d'import est la seule reference locale : il doit coller au code, exactement.
+// The SDK silently ignores any identifier missing from the Developer Portal. The
+// import JSON is the only local reference: it must match the code, exactly.
 function checkJSON() {
-  console.log('\n=== JSON D\'IMPORT (wavedash-achievements.json) ===');
+  console.log('\n=== IMPORT JSON (wavedash-achievements.json) ===');
   const j = JSON.parse(fs.readFileSync('wavedash-achievements.json', 'utf8'));
   const json = j.achievements.map(a => a.identifier);
   check(JSON.stringify(json) === JSON.stringify(IDS),
-    'les ' + IDS.length + ' identifiants du JSON sont ceux que le code derive de ACHT');
+    'the ' + IDS.length + ' identifiers in the JSON are the ones the code derives from ACHT');
   const manquants = IDS.filter(i => !json.includes(i));
   const surplus = json.filter(i => !IDS.includes(i));
-  check(!manquants.length, 'aucun identifiant du jeu absent du JSON' + (manquants.length ? ' : ' + manquants : ''));
-  check(!surplus.length, 'aucun identifiant en trop dans le JSON' + (surplus.length ? ' : ' + surplus : ''));
+  check(!manquants.length, 'no game identifier missing from the JSON' + (manquants.length ? ': ' + manquants : ''));
+  check(!surplus.length, 'no extra identifier in the JSON' + (surplus.length ? ': ' + surplus : ''));
   check(j.achievements.every(a => a.display_name && a.description && 'stat_requirement' in a),
-    'chaque definition a display_name, description et stat_requirement');
+    'each definition has display_name, description and stat_requirement');
 }
 
 (async () => {
   await suite(process.argv[2] && process.argv[2][0] !== '-' ? process.argv[2] : 'src/index.html', 'SOURCE');
 
   if (!process.argv.includes('--src-only')) {
-    // Sortie terser reelle, avec les options de production. Seul le mangle
-    // toplevel est retire : le test appelle les fonctions du jeu par leur nom,
-    // et renommer des variables locales ne change pas ce qu'on verifie ici.
+    // Real terser output, with the production options. Only the toplevel
+    // mangle is removed: the test calls the game functions by their name,
+    // and renaming local variables does not change what is checked here.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rb-'));
     const html = fs.readFileSync('src/index.html', 'utf8');
     const js = /<script>([\s\S]*)<\/script>/.exec(html)[1];
@@ -181,11 +181,11 @@ function checkJSON() {
     execFileSync('./node_modules/.bin/terser', [path.join(tmp, 'in.js'), '-c', 'passes=3,unsafe=true', '-o', path.join(tmp, 'out.js')]);
     const out = path.join(tmp, 'game.html');
     fs.writeFileSync(out, '<script>' + fs.readFileSync(path.join(tmp, 'out.js'), 'utf8') + '</script>');
-    await suite(out, 'SORTIE TERSER');
+    await suite(out, 'TERSER OUTPUT');
   }
 
   checkJSON();
 
-  console.log(fail ? '\nECHEC' : '\nOK : l\'integration Wavedash tient, source et build.');
+  console.log(fail ? '\nFAIL' : '\nOK: the Wavedash integration holds, source and build.');
   process.exit(fail);
 })();

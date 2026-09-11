@@ -1,12 +1,12 @@
 'use strict';
-// Verifie les trois verbes de la v2, un par un et en isolation.
+// Checks the three v2 verbs, one by one and in isolation.
 const { load } = require('./harness');
 const file = process.argv[2] || 'src/index.html';
 let fail = 0;
-const check = (ok, msg) => { console.log((ok ? '  OK   ' : '  ECHEC') + '  ' + msg); if (!ok) fail = 1; };
+const check = (ok, msg) => { console.log((ok ? '  OK   ' : '  FAIL ') + '  ' + msg); if (!ok) fail = 1; };
 
-// --- 1. flips asymetriques : meme saut, on compare droite et gauche ---
-console.log('1. flips asymetriques');
+// --- 1. asymmetric flips: same jump, compare right and left ---
+console.log('1. asymmetric flips');
 const res = {};
 for (const key of ['arrowright', 'arrowleft']) {
   const G = load(file);
@@ -21,13 +21,13 @@ for (const key of ['arrowright', 'arrowleft']) {
   for (let i = 0; i < 60; i++) { G.frame(k); if (G.B.y > peak) peak = G.B.y; }
   res[key] = { vx: G.B.vx, h: peak - y0 };
 }
-console.log('  perilleux avant : ' + (res.arrowright.vx * 3.6).toFixed(0) + ' km/h, +' + res.arrowright.h.toFixed(2) + ' m');
-console.log('  salto arriere   : ' + (res.arrowleft.vx * 3.6).toFixed(0) + ' km/h, +' + res.arrowleft.h.toFixed(2) + ' m');
-check(res.arrowright.vx > res.arrowleft.vx, 'le perilleux avant est plus rapide');
-check(res.arrowleft.h > res.arrowright.h, 'le salto arriere monte plus haut');
+console.log('  front flip : ' + (res.arrowright.vx * 3.6).toFixed(0) + ' km/h, +' + res.arrowright.h.toFixed(2) + ' m');
+console.log('  back flip  : ' + (res.arrowleft.vx * 3.6).toFixed(0) + ' km/h, +' + res.arrowleft.h.toFixed(2) + ' m');
+check(res.arrowright.vx > res.arrowleft.vx, 'the front flip is faster');
+check(res.arrowleft.h > res.arrowright.h, 'the back flip goes higher');
 
-// --- 2. saut : tap simultane, rearme uniquement au sol ---
-console.log('2. saut au tap simultane');
+// --- 2. jump: simultaneous tap, rearms only on the ground ---
+console.log('2. jump on simultaneous tap');
 {
   const G = load(file);
   G.spawn(4242); G.mode = 1;
@@ -36,26 +36,26 @@ console.log('2. saut au tap simultane');
   for (let i = 0; i < 6; i++) G.frame({ arrowleft: 1, arrowright: 1 });
   for (let i = 0; i < 3; i++) G.frame({});
   const v1 = G.B.vy;
-  check(v1 > v0 + 6, 'le tap declenche le saut (' + v0.toFixed(1) + ' -> ' + v1.toFixed(1) + ' m/s)');
-  check(G.jmp === 0, 'le saut est consomme');
+  check(v1 > v0 + 6, 'the tap triggers the jump (' + v0.toFixed(1) + ' -> ' + v1.toFixed(1) + ' m/s)');
+  check(G.jmp === 0, 'the jump is consumed');
   for (let i = 0; i < 6; i++) G.frame({ arrowleft: 1, arrowright: 1 });
   for (let i = 0; i < 3; i++) G.frame({});
-  check(G.B.vy < v1, 'le second tap en l air est refuse');
+  check(G.B.vy < v1, 'the second tap in the air is refused');
   let landed = 0;
   for (let i = 0; i < 400 && !landed; i++) { G.frame({}); if (!G.air) landed = 1; }
-  check(landed && G.jmp === 1, 'le saut se rearme au contact du sol');
+  check(landed && G.jmp === 1, 'the jump rearms on ground contact');
 }
 
-// --- 3. maintien = tout schuss, jamais de saut parasite ---
-console.log('3. tout schuss au maintien');
+// --- 3. hold = tuck, never a stray jump ---
+console.log('3. tuck on hold');
 {
   const G = load(file);
   G.spawn(4242); G.mode = 1;
   G.play(150, null, 4242);
   let consumed = 0;
   for (let i = 0; i < 90; i++) { G.frame({ arrowleft: 1, arrowright: 1 }); if (G.jmp === 0) consumed = 1; }
-  check(!consumed, 'le maintien ne consomme jamais le saut');
-  check(G.tuckV > 0.9, 'le tout schuss est engage (tuckV=' + G.tuckV.toFixed(2) + ')');
+  check(!consumed, 'holding never consumes the jump');
+  check(G.tuckV > 0.9, 'the tuck is engaged (tuckV=' + G.tuckV.toFixed(2) + ')');
 }
 
 process.exit(fail);

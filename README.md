@@ -1,129 +1,119 @@
 # ROLLERBOW
 
-Une licorne ragdoll dévale une piste arc-en-ciel. Entrée pour **js13kGames 2026**, thème « Unicorns and Rainbows ».
+A ragdoll unicorn hurtles down a rainbow track. Entry for **js13kGames 2026**, theme "Unicorns and Rainbows".
 
 ![ROLLERBOW](media/gameplay.gif)
 
-Ce GIF n'est pas un enregistrement d'écran : le jeu est **piloté**. `Math.random` est remplacé par un générateur à graine et `requestAnimationFrame` est confisqué, donc la cadence est régulière et deux captures donnent le même fichier. Le pilote est dans `tools/autopilot.js`.
+This GIF is not a screen recording: the game is **driven**. `Math.random` is replaced by a seeded generator and `requestAnimationFrame` is taken over, so the frame rate is steady and two captures produce the same file. The driver is in `tools/autopilot.js`.
 
-Tout tient dans un fichier HTML de moins de 13 312 octets une fois zippé : pas de framework, pas d'image, pas de fichier son. Le décor, la piste, la licorne et la musique sont générés au code.
+Everything fits in a single HTML file under 13,312 bytes once zipped: no framework, no image, no sound file. The scenery, the track, the unicorn and the music are generated in code.
 
-## Jouer
+## Play
 
-Ouvrez `src/index.html` dans un navigateur : le jeu y est autonome et lisible.
-`dist/js13k/index.html` est la même page compressée, celle que contient le zip.
+Open `src/index.html` in a browser: the game there is self-contained and readable.
+`dist/js13k/index.html` is the same page, compressed, the one the zip contains.
 
-| action | clavier | tactile |
+| action | keyboard | touch |
 |---|---|---|
-| relever la patte avant, salto arrière | ← ou A ou Q | moitié gauche |
-| relever la patte arrière, périlleux avant | → ou D | moitié droite |
-| saut, au sol comme en l'air | appui bref sur les deux | tap sur les deux moitiés |
-| tout schuss | maintien des deux, ou ↓ | maintien des deux moitiés |
-| couper la musique | M | |
-| couper le sang | G | |
+| raise the front leg, backflip | ← or A or Q | left half |
+| raise the back leg, frontflip | → or D | right half |
+| jump, on the ground as in the air | short press on both | tap on both halves |
+| tuck | hold both, or ↓ | hold both halves |
+| mute the music | M | |
+| turn off the blood | G | |
 
-Le salto arrière fait monter et freine, le périlleux avant fait piquer et accélère. Le saut ne se réarme qu'au contact du sol.
+The backflip makes you climb and brakes, the frontflip makes you dive and accelerates. The jump only rearms on contact with the ground.
 
-## Construire
+## Build
 
 ```bash
 npm install
-./build.sh                    # construit src/index.html
-./build.sh --best 6           # 6 tirages roadroller, garde le plus petit
-./build.sh src/v1-skates.html # variante patins à roulettes
+./build.sh                    # builds src/index.html
+./build.sh --best 6           # 6 roadroller draws, keeps the smallest
 ```
 
-La chaîne extrait le `<script>`, le passe dans **terser** puis **roadroller**, reconstruit un HTML minimal, zippe en `-9` puis recompresse le conteneur avec **advzip** (zopfli). Elle échoue si le budget de 13 312 octets est dépassé, et ne remplace les livrables qu'une fois l'archive vérifiée.
+The chain extracts the `<script>`, runs it through **terser** then **roadroller**, rebuilds a minimal HTML, zips at `-9` then recompresses the container with **advzip** (zopfli). It fails if the 13,312-byte budget is exceeded, and only replaces the deliverables once the archive is verified.
 
-Trois sorties, depuis le même état du source :
+Three outputs, from the same state of the source:
 
 ```
-rollerbow.zip              archive du concours, index.html à sa racine
-dist/js13k/index.html      la page que contient le zip, compressée
-dist/wavedash/index.html   la même page sans minification, pour Wavedash
+rollerbow.zip              contest archive, index.html at its root
+dist/js13k/index.html      the page the zip contains, compressed
+dist/wavedash/index.html   the same page without minification, for Wavedash
 ```
 
-`roadroller` cherche ses paramètres au hasard : deux builds du même source ne donnent pas le même nombre d'octets. Lire le chiffre que le build vient d'imprimer, jamais un chiffre noté ici. `--best 6` relance le tirage six fois et garde le plus petit.
+`roadroller` searches its parameters at random: two builds of the same source do not give the same byte count. Read the figure the build has just printed, never a figure written here. `--best 6` runs the draw six times and keeps the smallest.
 
-### Pourquoi advzip et pas seulement `zip -9`
+### Why advzip and not `zip -9` alone
 
-`zip -9` laisse de la place dans le conteneur DEFLATE. `advzip -z -4` recompresse le même contenu avec zopfli : **353 octets rendus** sur ce jeu, soit plus que la marge restante. Le fichier extrait est identique bit pour bit.
+`zip -9` leaves room in the DEFLATE container. `advzip -z -4` recompresses the same content with zopfli: **353 bytes returned** on this game, more than the remaining headroom. The extracted file is identical bit for bit.
 
 ## Tests
 
-Le jeu n'a aucune dépendance à un navigateur réel : un canvas simulé suffit à le faire tourner sous node. Cela permet de mesurer ce qui serait invisible à l'œil.
+The game has no dependency on a real browser: a simulated canvas is enough to run it under node. That makes it possible to measure what would be invisible to the eye.
 
 ```bash
-node test/integrity.js src/index.html          # aucun NaN ne doit atteindre le canvas
-node test/controls.js  src/index.html          # les trois verbes de contrôle
-node test/hud.js       src/index.html          # aucune superposition de texte
-node test/balance.js   src/index.html          # morts, distance, vitesse sur 8 pistes
-node test/wavedash.js                          # trophées et classements, source ET sortie terser
-node test/build-smoke.js dist/js13k/index.html # le BUILD compressé, pas la source
+node test/integrity.js src/index.html          # no NaN must reach the canvas
+node test/controls.js  src/index.html          # the three control verbs
+node test/hud.js       src/index.html          # no text overlap
+node test/balance.js   src/index.html          # deaths, distance, speed over 8 tracks
+node test/wavedash.js                          # achievements and leaderboards, source AND terser output
+node test/build-smoke.js dist/js13k/index.html # the compressed BUILD, not the source
 ```
 
-Le dernier est le plus important : terser et roadroller peuvent casser du code parfaitement valide, et c'est l'artefact compressé qu'on soumet.
+The last one is the most important: terser and roadroller can break perfectly valid code, and the compressed artifact is what gets submitted.
 
-`test/wavedash.js` tourne aussi sur la **sortie terser**, et pas seulement sur la source. La raison est un piège coûteux : `terser --compress booleans_as_integers` réécrit `true` en `1`, le SDK Wavedash valide ses types et rejette l'appel, la garde défensive avale l'exception — et plus rien ne part, sans un mot dans la console, uniquement depuis le build. Ses doublures reproduisent donc la validation de types du vrai SDK et **comptent** les violations au lieu de tout accepter. Vérifié : en réactivant l'option, le test tombe sur 14 violations et 0 trophée envoyé.
+`test/wavedash.js` also runs on the **terser output**, and not only on the source. The reason is an expensive trap: `terser --compress booleans_as_integers` rewrites `true` as `1`, the Wavedash SDK validates its types and rejects the call, the defensive guard swallows the exception, and nothing gets sent any more, without a word in the console, from the build only. Its stubs therefore reproduce the type validation of the real SDK and **count** the violations instead of accepting everything. Verified: turning the option back on, the test lands on 14 violations and 0 achievements sent.
 
-`test/integrity.js` mérite un mot. Un `NaN` passé à `fillRect`, ou une couleur `hsl(NaN,...)`, ne lève aucune erreur : le navigateur ignore silencieusement l'appel. L'élément disparaît de l'écran sans le moindre message. Ce test attrape ces cas.
+`test/integrity.js` deserves a word. A `NaN` passed to `fillRect`, or a color `hsl(NaN,...)`, raises no error: the browser silently ignores the call. The element disappears from the screen without the slightest message. This test catches those cases.
 
-## Outils de réglage
+## The physics model
 
-Trois pages autonomes servies pendant le développement, conservées parce qu'elles restent utiles pour retoucher :
+The physics comes from studying the source code of **Action SuperCross** (the predecessor of Elasto Mania), released by its authors. The model was reimplemented from scratch in JavaScript from an understanding of how it works, not transposed line by line.
 
-- `tools/music-picker.html` : six musiques de titre générées, jouables côte à côte
-- `tools/mane-picker.html` : six crinières animées par le même mouvement
-- `tools/anchor-tuner.html` : réglage des ancrages de crinière et de queue, avec contrôle en direct que les racines restent sous la peau
+What is carried over from it:
 
-## Le modèle physique
+- three rigid bodies, a chassis and two skates, linked by stiff, over-damped elastic rods
+- rolling contact at 0, 1 or 2 support points, with Huygens' theorem on the pivot
+- fixed time step of 3 ms, spring at 10,000 N/m, damping at 1,000 N·s/m, mass ratio 20:1
+- rotation is not a torque but a brief angular impulse of 12 rad/s, given back afterwards: that is what gives the original game its feel
 
-La physique vient de l'étude du code source d'**Action SuperCross** (le prédécesseur d'Elasto Mania), publié par ses auteurs. Le modèle a été réimplémenté de zéro en JavaScript à partir de la compréhension de son fonctionnement, pas transposé ligne à ligne.
+What was added for an endless descent: aerodynamic drag, an air stabilizer, lift at flat pitch, landing damping, and asymmetric flips.
 
-Ce qui en est repris :
+The Action SuperCross repository is *source-available*, not open source. None of its code is present here. Choose your own license for this project.
 
-- trois corps rigides, un châssis et deux patins, reliés par des tiges élastiques raides et sur-amorties
-- contact roulant à 0, 1 ou 2 points d'appui, avec théorème de Huygens sur le pivot
-- pas de temps fixe de 3 ms, ressort à 10 000 N/m, amortissement à 1 000 N·s/m, rapport de masse 20:1
-- la rotation n'est pas un couple mais une impulsion angulaire brève de 12 rad/s, restituée ensuite : c'est ce qui donne son toucher au jeu d'origine
+## Submission visuals
 
-Ce qui a été ajouté pour une descente infinie : traînée aérodynamique, stabilisateur aérien, portance à assiette plate, amorti de réception, et flips asymétriques.
+The form asks for a cover **800 × 500 px, PNG, ≤ 256 KB** and a thumbnail **320 × 320 px, PNG, ≤ 64 KB**, exact dimensions, mandatory format. Both are in `media/`. The uncompressed generator output they were derived from is kept on disk but out of the repository: recompressing an already quantized image stacks the losses, so a regenerated visual must start from that source, never from the committed PNG.
 
-Le dépôt d'Action SuperCross est *source-available* et non open source. Aucun de son code n'est présent ici. Choisissez votre propre licence pour ce projet.
-
-## Visuels de soumission
-
-Le formulaire demande une cover **800 × 500 px, PNG, ≤ 256 Ko** et une miniature **320 × 320 px, PNG, ≤ 64 Ko** — dimensions exactes, format imposé. Les deux sont dans `media/`, avec l'original non compressé à côté : recompresser une version déjà quantifiée cumule les pertes, il faut toujours repartir de la source.
-
-| fichier | dimensions | poids | PSNR |
+| file | dimensions | size | PSNR |
 |---|---|---|---|
-| `media/cover.png` | 800 × 500 | 172 678 o | 46,4 dB |
-| `media/thumbnail.png` | 320 × 320 | 52 828 o | 46,4 dB |
+| `media/cover.png` | 800 × 500 | 162,105 B | 46.5 dB |
+| `media/thumbnail.png` | 320 × 320 | 53,031 B | 46.6 dB |
 
 ## Structure
 
 ```
-build.sh                     chaîne de build
+build.sh                     build chain
 package.json                 terser + roadroller
-src/index.html               source lisible et commentée
-src/v1-skates.html           variante patins à roulettes, contrôles d'origine
-wavedash.toml                configuration du challenge Wavedash
-wavedash-achievements.json   définitions des trophées, à importer au portail
-dist/                        sortie du build (js13k et wavedash)
-test/                        harnais et tests
-tools/                       pages de réglage
-media/                       cover et miniature de soumission
+src/index.html               readable, commented source
+wavedash.toml                Wavedash challenge configuration
+wavedash-achievements.json   achievement definitions, to import at the portal
+dist/                        build output (js13k and wavedash)
+test/                        harness and tests
+tools/                       autopilot.js, the automatic driver used to record the gameplay GIF
+media/                       submission cover and thumbnail
 ```
 
 ## Wavedash
 
-Le jeu coche le challenge **Wavedash** de l'édition 2026. La plateforme injecte un global `Wavedash` avant le code du jeu ; celui-ci ne charge donc **aucune ressource externe** et ne dépend d'aucun SDK embarqué. Chaque appel est gardé par `self.Wavedash` : hors plateforme — sur js13kgames.com — le bloc est inerte et le jeu se comporte à l'identique.
+The game enters the **Wavedash** challenge of the 2026 edition. The platform injects a `Wavedash` global before the game code; the game therefore loads **no external resource** and depends on no bundled SDK. Every call is guarded by `self.Wavedash`: off the platform, on js13kgames.com, the block is inert and the game behaves identically.
 
-Ce qui est branché, pour **291 octets** dans le zip :
+What is wired up, for **291 bytes** in the zip:
 
-- `init()`, sans lequel le jeu resterait caché derrière l'écran de chargement de la plateforme
-- `requestStats()`, sans lequel aucun trophée ne se débloquerait, en silence
-- les **12 trophées** de la course, déjà affichés en jeu par un bandeau maison — donc visibles aussi pour les votants js13k
-- deux classements, **distance** et **score**, envoyés uniquement à un nouveau record local
+- `init()`, without which the game would stay hidden behind the platform loading screen
+- `requestStats()`, without which no achievement would unlock, silently
+- the **12 achievements** of the run, already shown in game by a homemade toast, so visible to js13k voters too
+- two leaderboards, **distance** and **score**, sent only on a new local record
 
-Les identifiants de trophées sont dérivés des titres affichés (`ACHT`) : `FIRST FLIP` devient `RB_FIRST_FLIP`. Renommer un titre renomme donc son trophée, et impose de mettre à jour sa définition au Developer Portal. `test/wavedash.js` vérifie que les identifiants du code et ceux de `wavedash-achievements.json` concordent exactement.
+Achievement ids are derived from the displayed titles (`ACHT`): `FIRST FLIP` becomes `RB_FIRST_FLIP`. Renaming a title therefore renames its achievement, and forces its definition to be updated at the Developer Portal. `test/wavedash.js` checks that the ids in the code and those in `wavedash-achievements.json` match exactly.

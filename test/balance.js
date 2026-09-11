@@ -1,7 +1,7 @@
 'use strict';
-// Mesure l'equilibrage sur plusieurs pistes : morts, distance, sauts.
-// Sert de garde-fou : un changement de physique qui double ou divise par deux
-// ces chiffres se voit immediatement, alors qu'il passerait inapercu en jouant.
+// Measures balance across several tracks: deaths, distance, jumps.
+// Acts as a guard rail: a physics change that doubles or halves these
+// numbers shows up immediately, while it would go unnoticed while playing.
 const { load, levelPilot } = require('./harness');
 
 const file = process.argv[2] || 'src/index.html';
@@ -28,12 +28,12 @@ function run(label, pilot) {
   }
   dists.sort((a, b) => a - b);
   console.log(label.padEnd(22),
-    'morts=' + String(deaths).padStart(3),
-    ' distance mediane=' + dists[dists.length >> 1].toFixed(0) + 'm',
+    'deaths=' + String(deaths).padStart(3),
+    ' median distance=' + dists[dists.length >> 1].toFixed(0) + 'm',
     ' max=' + dists[dists.length - 1].toFixed(0) + 'm',
-    ' vitesse moy=' + (spd / n * 3.6).toFixed(0) + 'km/h');
+    ' avg speed=' + (spd / n * 3.6).toFixed(0) + 'km/h');
 }
 
-console.log(file + '  (8 pistes, 60 s chacune)');
-run('pilote qui corrige', levelPilot);
-run('aucune entree', null);
+console.log(file + '  (8 tracks, 60 s each)');
+run('correcting pilot', levelPilot);
+run('no input', null);

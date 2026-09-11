@@ -6,7 +6,19 @@ dist/
 .gen-img/
 .DS_Store
 
-# Le lockfile fige les versions de terser et roadroller, dont depend la taille
-# de sortie. Il est exclu par un .gitignore_global : on le reprend ici.
+# The lockfile pins the terser and roadroller versions, which the output size
+# depends on. It is excluded by a .gitignore_global: we take it back here.
 !package-lock.json
 media/.js13k-images/
+
+# Prototypes and tuning labs: their job is done, their values are baked into the
+# game. Kept on disk, out of the repository.
+src/v1-skates.html
+tools/anchor-tuner.html
+tools/mane-picker.html
+tools/music-picker.html
+
+# Generator output the submission images were derived from. Kept on disk so the
+# PNGs can be regenerated from an uncompressed source rather than requantised.
+media/*-src.jpeg
+media/*-src.png

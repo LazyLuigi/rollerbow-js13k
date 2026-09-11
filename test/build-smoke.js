@@ -1,7 +1,7 @@
 'use strict';
-// Fait tourner le BUILD compresse, pas la source.
-// terser et roadroller peuvent casser du code parfaitement valide : ce test est
-// le seul qui verifie ce qu'on soumet reellement au concours.
+// Runs the compressed BUILD, not the source.
+// terser and roadroller can break perfectly valid code: this test is
+// the only one that checks what we actually submit to the contest.
 const { load } = require('./harness');
 const file = process.argv[2] || 'dist/index.html';
 
@@ -14,14 +14,14 @@ const spy = (m, a) => {
 };
 
 const G = load(file, { spy, dpr: 2 });
-for (let i = 0; i < 1800; i++) G.frame({});   // les noms sont mangles : on ne pilote pas
+for (let i = 0; i < 1800; i++) G.frame({});   // names are mangled: no piloting
 
 const span = Math.max(...cams) - Math.min(...cams);
-console.log('fichier            :', file);
-console.log('frames jouees      : 1800');
-console.log('appels canvas      :', calls);
-console.log('valeurs invalides  :', bad);
-console.log('deplacement camera :', (span / 1000).toFixed(1), 'k pixels sur 30 s');
+console.log('file               :', file);
+console.log('frames played      : 1800');
+console.log('canvas calls       :', calls);
+console.log('invalid values     :', bad);
+console.log('camera movement    :', (span / 1000).toFixed(1), 'k pixels over 30 s');
 const ok = bad === 0 && span > 5000;
-console.log(ok ? 'OK : le build compresse demarre, simule et dessine.' : 'ECHEC');
+console.log(ok ? 'OK : the compressed build starts, simulates and draws.' : 'FAIL');
 process.exit(ok ? 0 : 1);

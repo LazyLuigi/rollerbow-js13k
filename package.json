@@ -1,7 +1,7 @@
 {
   "name": "rollerbow",
   "version": "1.0.0",
-  "description": "Une licorne ragdoll devale une piste arc-en-ciel. js13kGames 2026.",
+  "description": "A ragdoll unicorn hurtles down a rainbow track. js13kGames 2026.",
   "private": true,
   "scripts": {
     "build": "./build.sh",

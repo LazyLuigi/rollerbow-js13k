@@ -1,11 +1,11 @@
 'use strict';
-// Harnais partage : fait tourner le jeu sous node avec un canvas simule.
+// Shared harness: runs the game under node with a simulated canvas.
 //
-// Le jeu n'a aucune dependance a un navigateur reel : il lui faut un contexte 2d,
-// requestAnimationFrame et un objet document. On les remplace par des doublures
-// qui enregistrent ce qui se passe au lieu de dessiner. Cela permet de mesurer
-// l'equilibrage, de detecter les NaN et de rejouer des scenarios de maniere
-// deterministe, choses impossibles a faire a l'oeil dans un navigateur.
+// The game has no dependency on a real browser: it needs a 2d context,
+// requestAnimationFrame and a document object. We replace them with stubs
+// that record what happens instead of drawing. This makes it possible to measure
+// balancing, to detect NaN and to replay scenarios in a deterministic way,
+// things that cannot be done by eye in a browser.
 
 const fs = require('fs');
 const vm = require('vm');
@@ -22,7 +22,7 @@ const DRAW = ['beginPath', 'moveTo', 'lineTo', 'bezierCurveTo', 'quadraticCurveT
 const STYLES = ['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha', 'font',
   'globalCompositeOperation', 'lineCap', 'lineJoin', 'textAlign', 'textBaseline'];
 
-// Cree un contexte 2d factice. `spy` recoit chaque appel : { m, args }.
+// Creates a fake 2d context. `spy` receives every call: { m, args }.
 function makeCtx(spy) {
   const ctx = {};
   for (const m of DRAW) ctx[m] = function (...a) { if (spy) spy(m, a); };
@@ -41,13 +41,13 @@ function makeCtx(spy) {
   return ctx;
 }
 
-// Charge un fichier de jeu et renvoie son contexte global, plus quelques aides.
-// opts.spy      : fonction appelee a chaque operation canvas
-// opts.width/height/dpr : geometrie simulee
+// Loads a game file and returns its global context, plus a few helpers.
+// opts.spy      : function called on every canvas operation
+// opts.width/height/dpr : simulated geometry
 function load(file, opts = {}) {
   const html = fs.readFileSync(file, 'utf8');
   const m = /<script>([\s\S]*)<\/script>/.exec(html);
-  if (!m) throw new Error('Aucun bloc <script> dans ' + file);
+  if (!m) throw new Error('No <script> block in ' + file);
 
   const canvas = { width: 0, height: 0, style: {}, addEventListener() {},
                    getContext: () => makeCtx(opts.spy) };
@@ -63,13 +63,13 @@ function load(file, opts = {}) {
     setInterval() { return 0; }
   };
   G.window = G;
-  G.self = G;                              // dans un navigateur self === window
-  if (opts.wavedash) G.Wavedash = opts.wavedash;   // doublure de la plateforme, absente par defaut
+  G.self = G;                              // in a browser self === window
+  if (opts.wavedash) G.Wavedash = opts.wavedash;   // platform stub, absent by default
   vm.createContext(G);
   vm.runInContext(m[1], G, { filename: file });
 
   let clock = 0;
-  // Avance d'une frame a 60 Hz. `keys` est l'etat clavier pour cette frame.
+  // Advances one frame at 60 Hz. `keys` is the keyboard state for this frame.
   G.frame = (keys) => {
     G.keys = keys || {};
     clock += 1000 / 60;
@@ -77,7 +77,7 @@ function load(file, opts = {}) {
     if (!f) throw new Error('requestAnimationFrame epuise');
     f(clock);
   };
-  // Joue n frames avec un pilote. Relance automatiquement apres la mort.
+  // Plays n frames with a driver. Restarts automatically after death.
   G.play = (n, pilot, seed) => {
     for (let i = 0; i < n; i++) {
       G.frame(pilot ? pilot(G) : {});
@@ -87,9 +87,9 @@ function load(file, opts = {}) {
   return G;
 }
 
-// Pilote de reference : corrige l'assiette en vol, ne touche pas au tout schuss.
-// Ne pas lui faire relacher le schuss rapidement, cela declencherait des sauts
-// et fausserait toute mesure de trajectoire.
+// Reference driver: corrects pitch attitude in the air, does not touch the tuck.
+// Do not make it release the tuck quickly, that would trigger jumps
+// and skew every trajectory measurement.
 function levelPilot(G) {
   const k = {}, B = G.B;
   if (!B) return k;
